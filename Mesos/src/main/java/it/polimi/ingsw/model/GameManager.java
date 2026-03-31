@@ -11,7 +11,25 @@ public class GameManager {
     public void saveMatch() {
     }
 
-    public void retrieveMatch(int matchID) {
+    
+    /**
+     * Retrieves a match by its unique identifier.
+     *
+     * @param matchID the unique ID of the match to retrieve
+     * @return the matching {@link Match} if found, otherwise {@code null}
+     */
+    public Match retrieveMatch(int matchID) {
+
+        Match foundedMatch = null;
+
+        for (Match match : matches) {
+            if (match.getMatchID() == matchID) {
+                foundedMatch = match;
+                break;
+            }
+        }
+
+        return foundedMatch;
     }
 
     public boolean closeMatch() {
