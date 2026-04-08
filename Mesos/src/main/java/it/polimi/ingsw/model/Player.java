@@ -4,6 +4,7 @@ import it.polimi.ingsw.model.card.Card;
 import it.polimi.ingsw.model.card.CharacterCard;
 import it.polimi.ingsw.model.card.character.Inventor;
 import it.polimi.ingsw.model.enums.TotemColor;
+import it.polimi.ingsw.model.state.NotPlaying;
 import it.polimi.ingsw.model.state.PlayerState;
 
 import java.util.ArrayList;
@@ -37,6 +38,10 @@ public class Player {
         this.usedInventors = new ArrayList<>();
         this.usedSets = new ArrayList<>();
         this.playerState = new NotPlaying();
+    }
+
+    public String getNickname() {
+        return nickname;
     }
 
     // FIXME: should add `pp: int` as parameter?

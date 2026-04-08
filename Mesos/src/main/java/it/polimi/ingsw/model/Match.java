@@ -14,7 +14,7 @@ public class Match {
     private final Date date = new Date();
     private final List<Player> playersList = new ArrayList<>();
     private int currentRound = 0;
-    private Era currentEra = Era.I;
+    private Era currentEra = Era.ERA_I;
     private int currentPlayersNumber = 0;
     private Board board;
     private Decks decks;
@@ -43,6 +43,10 @@ public class Match {
 
         // Unique ID for the match based on the time of creation (9 digits)
         this.matchID = (int) (last_6_digits_of_seconds * 1000 + milliseconds);
+    }
+
+    public int getMatchID() {
+        return matchID;
     }
 
     public void addPlayer(Match m, Player p) {
