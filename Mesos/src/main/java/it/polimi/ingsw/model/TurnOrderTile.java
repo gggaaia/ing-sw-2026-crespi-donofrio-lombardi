@@ -126,7 +126,7 @@ public class TurnOrderTile {
      * @param p the Player whose totem should be removed
      * @return true if the player's totem was removed, false otherwise
      */
-    public boolean removePlayer(Player p) {
+    public boolean clearSlot(Player p) {
         int index = getPlayersTurnOrderSlotIndex(p);
         if (index == -1) {
             return false;
