@@ -1,14 +1,14 @@
 package it.polimi.ingsw.model.enums;
 
 public enum InventorIcon {
-    I,
-    II,
-    III,
-    IV,
-    V,
-    VI,
-    VII,
-    VIII,
-    IX,
-    X
+    ARROW,
+    HIDE, //PELLE
+    BOAT,
+    POKEBOWL,
+    FLUTE,
+    ROPE,
+    BREAD,
+    IDOL,
+    HOOK,
+    NECKLACE
 }
