@@ -1,5 +1,6 @@
 package it.polimi.ingsw.model;
 
+import it.polimi.ingsw.model.card.BuildingCard;
 import it.polimi.ingsw.model.card.Card;
 import it.polimi.ingsw.model.card.CharacterCard;
 import it.polimi.ingsw.model.card.character.Inventor;
@@ -8,11 +9,12 @@ import it.polimi.ingsw.model.state.NotPlaying;
 import it.polimi.ingsw.model.state.PlayerState;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public class Player {
     private final String nickname;
-    private TotemColor color;
+    private TotemColor playerColor;
     private int prestigePoints;
     private int food;
     private boolean hasBuilding;
@@ -23,12 +25,10 @@ public class Player {
     private List<CharacterCard> usedSets;
     private PlayerState playerState;
 
-    // FIXME: remember to add color picking logic in controller when creating players
-    //        need to make sure eachmatch has 5 colors to pick for and for each match new 5 colors should be created to pick for
 
-    public Player(String nickname, TotemColor color){
+    public Player(String nickname, TotemColor color) {
         this.nickname = nickname;
-        this.color = color;
+        this.playerColor = color;
         this.prestigePoints = 0;
         this.food = 0;
         this.hasBuilding = false;
@@ -40,34 +40,139 @@ public class Player {
         this.playerState = new NotPlaying();
     }
 
+    public void changePP(int amount) {
+        this.prestigePoints += amount;
+    }
+
+    public void changeFood(int amount) {
+        this.food += amount;
+
+        // You cannot have negative food.
+        if (this.food < 0) {
+            this.food = 0;
+        }
+    }
+
+    public boolean hasEnoughFood(int cost) {
+        return this.food >= cost;
+    }
+
+    public void changeRedux(int amount) {
+        this.redux += amount;
+    }
+
+    public void increaseStars(int amount) {
+        this.starCounter += amount;
+        if (this.starCounter < 0) {
+            this.starCounter = 0;
+        }
+    }
+
+    public void addCardToHand(Card c) {
+        this.playerHand.add(c);
+        //flags the boolean if the card is a building
+        if (c instanceof BuildingCard) {
+            this.hasBuilding = true;
+        }
+    }
+
+    public int findSet() {
+        int setsFormed = 0;
+        boolean canFormMoreSets = true;
+
+        while (canFormMoreSets) {
+            List<CharacterCard> currentSet = new ArrayList<>();
+            List<Class<? extends CharacterCard>> uniqueTypesInSet = new ArrayList<>();
+
+            for (Card c : this.playerHand) {
+                //if set isnt full
+                if (currentSet.size() < 6) {
+                    if (c instanceof CharacterCard) {
+                        CharacterCard charCard = (CharacterCard) c;
+                        if (!this.usedSets.contains(charCard) && !uniqueTypesInSet.contains(charCard.getClass())) {
+                            currentSet.add(charCard);
+                            uniqueTypesInSet.add(charCard.getClass());
+                        }
+                    }
+
+                    if (currentSet.size() == 6) {
+                        this.usedSets.addAll(currentSet);
+                        setsFormed++;
+                    }
+                }
+            }
+
+            if (currentSet.size() < 6) {
+                canFormMoreSets = false;
+            }
+        }
+
+        return setsFormed;
+    }
+
+    public int findInventorPairs() {
+        int pairsFormed = 0;
+        List<Inventor> currentPair = new ArrayList<>();
+
+        for (Card c : this.playerHand) {
+
+
+            if (c instanceof Inventor) {
+                Inventor inventorCard = (Inventor) c;
+
+                if (!this.usedInventors.contains(inventorCard)) {
+                    currentPair.add(inventorCard);
+
+                    if (currentPair.size() == 2) {
+                        this.usedInventors.addAll(currentPair);
+                        pairsFormed++;
+
+                        currentPair.clear();
+                    }
+                }
+            }
+        }
+
+        return pairsFormed;
+    }
+
+    public void setPlayerState(PlayerState newState) {
+        this.playerState = newState;
+    }
+
     public String getNickname() {
         return nickname;
     }
 
-    // FIXME: should add `pp: int` as parameter?
-    public void changePP() {
+    public TotemColor getPlayerColor() {
+        return playerColor;
     }
 
-    // FIXME: should add `food: int` as parameter?
-    public void changeFood() {
+    public int getPrestigePoints() {
+        return prestigePoints;
     }
 
-    // FIXME: should add `redux: int` as parameter?
-    public void changeRedux() {
+    public int getFood() {
+        return food;
     }
 
-    // FIXME: should add `stars: int` as parameter?
-    public void increaseStars() {
+    public int getRedux() {
+        return redux;
     }
 
-    public void addCardToHand(Card c) {
+    public int getStarCounter() {
+        return starCounter;
     }
 
-    public int findSet() {
-        return 0;
+    public PlayerState getPlayerState() {
+        return playerState;
     }
 
-    public int findInventorPairs() {
-        return 0;
+    public boolean hasBuilding() {
+        return hasBuilding;
+    }
+
+    public List<Card> getPlayerHand() {
+        return new ArrayList<>(this.playerHand);
     }
 }
