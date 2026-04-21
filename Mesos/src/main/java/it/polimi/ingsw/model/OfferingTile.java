@@ -2,6 +2,9 @@ package it.polimi.ingsw.model;
 
 import it.polimi.ingsw.model.enums.TileLetter;
 import it.polimi.ingsw.model.enums.TotemColor;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 
 public class OfferingTile {
@@ -43,5 +46,17 @@ public class OfferingTile {
     public int getMinPlayers() { return minPlayers; }
     public int getFoodGained() { return foodGained; }
     public TotemColor getCurrentTotemColor() { return currentTotemColor; }
+
+    public static List<OfferingTile> createAllTiles() {
+        return new ArrayList<>(Arrays.asList(
+                new OfferingTile(TileLetter.A, 0, 0, 5, 3),
+                new OfferingTile(TileLetter.B, 0, 1, 2, 0),
+                new OfferingTile(TileLetter.C, 1, 0, 2, 0),
+                new OfferingTile(TileLetter.D, 0, 2, 3, 0),
+                new OfferingTile(TileLetter.E, 1, 1, 2, 0),
+                new OfferingTile(TileLetter.F, 2, 0, 4, 0),
+                new OfferingTile(TileLetter.G, 2, 1, 3, 0)
+        ));
+    }
 
 }
