@@ -1,5 +1,6 @@
 package it.polimi.ingsw.model.card.event;
 
+import it.polimi.ingsw.model.card.BuildingCard;
 import it.polimi.ingsw.model.card.EventCard;
 import it.polimi.ingsw.model.card.character.Hunter;
 import it.polimi.ingsw.model.enums.Era;
@@ -23,12 +24,14 @@ public class Hunting extends EventCard {
 
     @Override
     public void applyEffect(List<Player> players) {
-        for (Player p : players) {
-            int count = p.getPlayerHand().stream()
-                    .filter(card -> card instanceof Hunter)
-                    .count();
-            p.changePP(this.bonusPoint*count);
-            p.changeFood(1);
+        for (Player player : players) {
+            int count = player.getCounterHunter();
+            List<BuildingCard> buildings = player.getPlayerBuildings();
+            for (BuildingCard card : buildings) {
+                count=(card.hasHuntingBonus(player)? count*2 : count);
+            }
+            player.changePP(this.bonusPoint*count);
+            player.changeFood(count);
         }
     }
 }

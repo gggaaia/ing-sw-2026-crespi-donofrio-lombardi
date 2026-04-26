@@ -1,8 +1,11 @@
 package it.polimi.ingsw.model.card.event;
 
 import it.polimi.ingsw.model.Player;
+import it.polimi.ingsw.model.card.BuildingCard;
 import it.polimi.ingsw.model.card.CharacterCard;
 import it.polimi.ingsw.model.card.EventCard;
+import it.polimi.ingsw.model.card.building.SustenanceBonusGatherer;
+import it.polimi.ingsw.model.card.building.SustenanceBonusPainter;
 import it.polimi.ingsw.model.card.character.Gatherer;
 import it.polimi.ingsw.model.card.character.Hunter;
 import it.polimi.ingsw.model.enums.Era;
@@ -34,22 +37,23 @@ public class Sustenance extends EventCard {
 
     @Override
     public void applyEffect(List<Player> players) {
-        for (Player p : players) {
-            int count = p.getPlayerHand().stream()
-                    .filter(card->card instanceof CharacterCard)
-                    .count();
-            int discount = p.getPlayerHand().stream()
-                    .filter(card->card instanceof Gatherer)
-                    .count();
+        //FIXME: aggiungi la chiamata alle building per ottenere lo sconto
+        for (Player player : players) {
+            int count = player.getPlayerHand().size();
+            int discount = player.getGathererCounter();
+            List<BuildingCard> buildings = player.getPlayerBuildings();
+            for (BuildingCard card : buildings) {
+                discount+=card.sustenanceBonus(player);
+            }
             int cost= count-(3*discount);
             cost= Math.max(cost, 0);
-           if(cost<p.getFood()){
-               p.changeFood(-cost);
+           if(cost<=player.getFood()){
+               player.changeFood(-cost);
            }
            else{
-               cost= cost-p.getFood();
-               p.setFood(0);
-               p.changePP(-cost*malusPoints);
+               cost= cost-player.getFood();
+               player.changeFood(-player.getFood());
+               player.changePP(-cost*malusPoints);
            }
         }
     }

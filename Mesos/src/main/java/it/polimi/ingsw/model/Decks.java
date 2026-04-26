@@ -19,15 +19,12 @@ public class Decks {
         this.buildingDeck = new ArrayList<>();
     }
 
+    //TODO: implements the method
     public void populateDecks(int playersNumber) {
-        //lancia IOEexcpetion se il file JSON manca
-        /*if (card.minPlayers <= playersNumber) {
-            buildingDeck.add(card);
-        }*/
+
     }
 
     public void shuffleDecks() {
-        // FIXME: shuffle per era @Simo
         Collections.shuffle(this.tribeDeck);
         this.tribeDeck.sort(Comparator.comparing(Card::getEra));
 
@@ -39,13 +36,13 @@ public class Decks {
         if (this.tribeDeck.isEmpty()) {
             throw new EmptyDeckException("The tribe deck is empty");
         }
-        return this.tribeDeck.remove(0);
+        return this.tribeDeck.removeFirst();
     }
 
     public Card drawBuilding() throws EmptyDeckException {
         if (this.buildingDeck.isEmpty()) {
             throw new EmptyDeckException("The building deck is empty");
         }
-        return this.buildingDeck.remove(0);
+        return this.buildingDeck.removeFirst();
     }
 }

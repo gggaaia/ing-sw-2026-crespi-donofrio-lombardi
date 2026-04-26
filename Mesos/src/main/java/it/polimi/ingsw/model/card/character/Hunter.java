@@ -22,6 +22,8 @@ public class Hunter extends CharacterCard {
 
     public void drawEffect(Player player) {
         player.changeFood(foodBonus ? 1 : 0);
+        player.increaseHunterCounter(1);
     }
+
 
 }

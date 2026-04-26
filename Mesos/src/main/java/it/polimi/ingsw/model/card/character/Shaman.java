@@ -1,5 +1,6 @@
 package it.polimi.ingsw.model.card.character;
 
+import it.polimi.ingsw.model.Player;
 import it.polimi.ingsw.model.card.CharacterCard;
 import it.polimi.ingsw.model.enums.Era;
 
@@ -17,5 +18,10 @@ public class Shaman extends CharacterCard {
 
     public void setStars(int stars) {
         this.stars = stars;
+    }
+
+    public void drawEffect(Player player) {
+        player.increaseShamanCounter(1);
+        player.increaseStars(stars);
     }
 }

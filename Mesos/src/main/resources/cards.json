@@ -1,0 +1,854 @@
+{
+  "tribeCards": [
+    {
+      "cardID": "001",
+      "type": "Hunter",
+      "era": "ERA_1",
+      "minPlayers": 2,
+      "foodBonus": false
+    },
+    {
+      "cardID": "002",
+      "type": "Hunter",
+      "era": "ERA_1",
+      "minPlayers": 3,
+      "foodBonus": false
+    },
+    {
+      "cardID": "003",
+      "type": "Hunter",
+      "era": "ERA_1",
+      "minPlayers": 3,
+      "foodBonus": false
+    },
+    {
+      "cardID": "004",
+      "type": "Hunter",
+      "era": "ERA_1",
+      "minPlayers": 3,
+      "foodBonus": false
+    },
+    {
+      "cardID": "005",
+      "type": "Hunter",
+      "era": "ERA_1",
+      "minPlayers": 2,
+      "foodBonus": true
+    },
+    {
+      "cardID": "006",
+      "type": "Hunter",
+      "era": "ERA_1",
+      "minPlayers": 2,
+      "foodBonus": true
+    },
+    {
+      "cardID": "007",
+      "type": "Artist",
+      "era": "ERA_1",
+      "minPlayers": 2
+    },
+    {
+      "cardID": "008",
+      "type": "Artist",
+      "era": "ERA_1",
+      "minPlayers": 2
+    },
+    {
+      "cardID": "009",
+      "type": "Artist",
+      "era": "ERA_1",
+      "minPlayers": 2
+    },
+    {
+      "cardID": "010",
+      "type": "Artist",
+      "era": "ERA_1",
+      "minPlayers": 3
+    },
+    {
+      "cardID": "011",
+      "type": "Artist",
+      "era": "ERA_1",
+      "minPlayers": 4
+    },
+    {
+      "cardID": "012",
+      "type": "Gatherer",
+      "era": "ERA_1",
+      "minPlayers": 2
+    },
+    {
+      "cardID": "013",
+      "type": "Gatherer",
+      "era": "ERA_1",
+      "minPlayers": 2
+    },
+    {
+      "cardID": "014",
+      "type": "Gatherer",
+      "era": "ERA_1",
+      "minPlayers": 3
+    },
+    {
+      "cardID": "015",
+      "type": "Gatherer",
+      "era": "ERA_1",
+      "minPlayers": 5
+    },
+    {
+      "cardID": "016",
+      "type": "Shaman",
+      "era": "ERA_1",
+      "minPlayers": 2,
+      "stars": 1
+    },
+    {
+      "cardID": "017",
+      "type": "Shaman",
+      "era": "ERA_1",
+      "minPlayers": 4,
+      "stars": 1
+    },
+    {
+      "cardID": "018",
+      "type": "Shaman",
+      "era": "ERA_1",
+      "minPlayers": 2,
+      "stars": 2
+    },
+    {
+      "cardID": "019",
+      "type": "Shaman",
+      "era": "ERA_1",
+      "minPlayers": 5,
+      "stars": 2
+    },
+    {
+      "cardID": "020",
+      "type": "Builder",
+      "era": "ERA_1",
+      "minPlayers": 2,
+      "buildingCostRedux": 1,
+      "prestigePoint": 3
+    },
+    {
+      "cardID": "021",
+      "type": "Builder",
+      "era": "ERA_1",
+      "minPlayers": 2,
+      "buildingCostRedux": 1,
+      "prestigePoint": 2
+    },
+    {
+      "cardID": "022",
+      "type": "Builder",
+      "era": "ERA_1",
+      "minPlayers": 2,
+      "buildingCostRedux": 2,
+      "prestigePoint": 0
+    },
+    {
+      "cardID": "023",
+      "type": "Builder",
+      "era": "ERA_1",
+      "minPlayers": 5,
+      "buildingCostRedux": 2,
+      "prestigePoint": 1
+    },
+    {
+      "cardID": "024",
+      "type": "Inventor",
+      "era": "ERA_1",
+      "minPlayers": 2,
+      "inventorIcon": "BREAD"
+    },
+    {
+      "cardID": "025",
+      "type": "Inventor",
+      "era": "ERA_1",
+      "minPlayers": 4,
+      "inventorIcon": "FLUTE"
+    },
+    {
+      "cardID": "026",
+      "type": "Inventor",
+      "era": "ERA_1",
+      "minPlayers": 4,
+      "inventorIcon": "ROPE"
+    },
+    {
+      "cardID": "027",
+      "type": "Inventor",
+      "era": "ERA_1",
+      "minPlayers": 2,
+      "inventorIcon": "ARROW"
+    },
+    {
+      "cardID": "028",
+      "type": "Inventor",
+      "era": "ERA_1",
+      "minPlayers": 2,
+      "inventorIcon": "HIDE"
+    },
+    {
+      "cardID": "029",
+      "type": "Inventor",
+      "era": "ERA_1",
+      "minPlayers": 2,
+      "inventorIcon": "BOAT"
+    },
+    {
+      "cardID": "030",
+      "type": "Inventor",
+      "era": "ERA_1",
+      "minPlayers": 4,
+      "inventorIcon": "POKEBOWL"
+    },
+    {
+      "cardID": "031",
+      "type": "Hunter",
+      "era": "ERA_2",
+      "minPlayers": 2,
+      "foodBonus": false
+    },
+    {
+      "cardID": "032",
+      "type": "Hunter",
+      "era": "ERA_2",
+      "minPlayers": 2,
+      "foodBonus": false
+    },
+    {
+      "cardID": "033",
+      "type": "Hunter",
+      "era": "ERA_2",
+      "minPlayers": 5,
+      "foodBonus": false
+    },
+    {
+      "cardID": "034",
+      "type": "Hunter",
+      "era": "ERA_2",
+      "minPlayers": 2,
+      "foodBonus": true
+    },
+    {
+      "cardID": "035",
+      "type": "Hunter",
+      "era": "ERA_2",
+      "minPlayers": 3,
+      "foodBonus": true
+    },
+    {
+      "cardID": "036",
+      "type": "Hunter",
+      "era": "ERA_2",
+      "minPlayers": 4,
+      "foodBonus": true
+    },
+    {
+      "cardID": "037",
+      "type": "Artist",
+      "era": "ERA_2",
+      "minPlayers": 2
+    },
+    {
+      "cardID": "038",
+      "type": "Artist",
+      "era": "ERA_2",
+      "minPlayers": 2
+    },
+    {
+      "cardID": "039",
+      "type": "Artist",
+      "era": "ERA_2",
+      "minPlayers": 2
+    },
+    {
+      "cardID": "040",
+      "type": "Artist",
+      "era": "ERA_2",
+      "minPlayers": 3
+    },
+    {
+      "cardID": "041",
+      "type": "Gatherer",
+      "era": "ERA_2",
+      "minPlayers": 2
+    },
+    {
+      "cardID": "042",
+      "type": "Gatherer",
+      "era": "ERA_2",
+      "minPlayers": 3
+    },
+    {
+      "cardID": "043",
+      "type": "Gatherer",
+      "era": "ERA_2",
+      "minPlayers": 4
+    },
+    {
+      "cardID": "044",
+      "type": "Gatherer",
+      "era": "ERA_2",
+      "minPlayers": 5
+    },
+    {
+      "cardID": "045",
+      "type": "Shaman",
+      "era": "ERA_2",
+      "minPlayers": 5,
+      "stars": 1
+    },
+    {
+      "cardID": "046",
+      "type": "Shaman",
+      "era": "ERA_2",
+      "minPlayers": 2,
+      "stars": 1
+    },
+    {
+      "cardID": "047",
+      "type": "Shaman",
+      "era": "ERA_2",
+      "minPlayers": 5,
+      "stars": 2
+    },
+    {
+      "cardID": "048",
+      "type": "Builder",
+      "era": "ERA_2",
+      "minPlayers": 3,
+      "buildingCostRedux": 1,
+      "prestigePoint": 2
+    },
+    {
+      "cardID": "049",
+      "type": "Builder",
+      "era": "ERA_2",
+      "minPlayers": 2,
+      "buildingCostRedux": 1,
+      "prestigePoint": 4
+    },
+    {
+      "cardID": "050",
+      "type": "Builder",
+      "era": "ERA_2",
+      "minPlayers": 2,
+      "buildingCostRedux": 2,
+      "prestigePoint": 1
+    },
+    {
+      "cardID": "051",
+      "type": "Builder",
+      "era": "ERA_2",
+      "minPlayers": 2,
+      "buildingCostRedux": 2,
+      "prestigePoint": 3
+    },
+    {
+      "cardID": "052",
+      "type": "Inventor",
+      "era": "ERA_2",
+      "minPlayers": 2,
+      "inventorIcon": "POKEBOWL"
+    },
+    {
+      "cardID": "053",
+      "type": "Inventor",
+      "era": "ERA_2",
+      "minPlayers": 2,
+      "inventorIcon": "ROPE"
+    },
+    {
+      "cardID": "054",
+      "type": "Inventor",
+      "era": "ERA_2",
+      "minPlayers": 2,
+      "inventorIcon": "FLUTE"
+    },
+    {
+      "cardID": "055",
+      "type": "Inventor",
+      "era": "ERA_2",
+      "minPlayers": 2,
+      "inventorIcon": "HIDE"
+    },
+    {
+      "cardID": "056",
+      "type": "Inventor",
+      "era": "ERA_2",
+      "minPlayers": 4,
+      "inventorIcon": "HOOK"
+    },
+    {
+      "cardID": "057",
+      "type": "Inventor",
+      "era": "ERA_2",
+      "minPlayers": 2,
+      "inventorIcon": "IDOL"
+    },
+    {
+      "cardID": "058",
+      "type": "Hunter",
+      "era": "ERA_3",
+      "minPlayers": 2,
+      "foodBonus": false
+    },
+    {
+      "cardID": "059",
+      "type": "Hunter",
+      "era": "ERA_3",
+      "minPlayers": 2,
+      "foodBonus": false
+    },
+    {
+      "cardID": "060",
+      "type": "Hunter",
+      "era": "ERA_3",
+      "minPlayers": 2,
+      "foodBonus": true
+    },
+    {
+      "cardID": "061",
+      "type": "Hunter",
+      "era": "ERA_3",
+      "minPlayers": 5,
+      "foodBonus": true
+    },
+    {
+      "cardID": "062",
+      "type": "Artist",
+      "era": "ERA_3",
+      "minPlayers": 2
+    },
+    {
+      "cardID": "063",
+      "type": "Artist",
+      "era": "ERA_3",
+      "minPlayers": 2
+    },
+    {
+      "cardID": "064",
+      "type": "Artist",
+      "era": "ERA_3",
+      "minPlayers": 2
+    },
+    {
+      "cardID": "065",
+      "type": "Artist",
+      "era": "ERA_3",
+      "minPlayers": 5
+    },
+    {
+      "cardID": "066",
+      "type": "Gatherer",
+      "era": "ERA_3",
+      "minPlayers": 2
+    },
+    {
+      "cardID": "067",
+      "type": "Gatherer",
+      "era": "ERA_3",
+      "minPlayers": 4
+    },
+    {
+      "cardID": "068",
+      "type": "Gatherer",
+      "era": "ERA_3",
+      "minPlayers": 5
+    },
+    {
+      "cardID": "069",
+      "type": "Shaman",
+      "era": "ERA_3",
+      "minPlayers": 2,
+      "stars": 2
+    },
+    {
+      "cardID": "070",
+      "type": "Shaman",
+      "era": "ERA_3",
+      "minPlayers": 3,
+      "stars": 2
+    },
+    {
+      "cardID": "071",
+      "type": "Shaman",
+      "era": "ERA_3",
+      "minPlayers": 4,
+      "stars": 2
+    },
+    {
+      "cardID": "072",
+      "type": "Shaman",
+      "era": "ERA_3",
+      "minPlayers": 2,
+      "stars": 3
+    },
+    {
+      "cardID": "073",
+      "type": "Shaman",
+      "era": "ERA_3",
+      "minPlayers": 2,
+      "stars": 3
+    },
+    {
+      "cardID": "074",
+      "type": "Builder",
+      "era": "ERA_3",
+      "minPlayers": 5,
+      "buildingCostRedux": 1,
+      "prestigePoint": 4
+    },
+    {
+      "cardID": "075",
+      "type": "Builder",
+      "era": "ERA_3",
+      "minPlayers": 2,
+      "buildingCostRedux": 1,
+      "prestigePoint": 5
+    },
+    {
+      "cardID": "076",
+      "type": "Builder",
+      "era": "ERA_3",
+      "minPlayers": 2,
+      "buildingCostRedux": 2,
+      "prestigePoint": 2
+    },
+    {
+      "cardID": "077",
+      "type": "Builder",
+      "era": "ERA_3",
+      "minPlayers": 2,
+      "buildingCostRedux": 2,
+      "prestigePoint": 3
+    },
+    {
+      "cardID": "078",
+      "type": "Inventor",
+      "era": "ERA_3",
+      "minPlayers": 2,
+      "inventorIcon": "IDOL"
+    },
+    {
+      "cardID": "079",
+      "type": "Inventor",
+      "era": "ERA_3",
+      "minPlayers": 2,
+      "inventorIcon": "HOOK"
+    },
+    {
+      "cardID": "080",
+      "type": "Inventor",
+      "era": "ERA_3",
+      "minPlayers": 2,
+      "inventorIcon": "NECKLACE"
+    },
+    {
+      "cardID": "081",
+      "type": "Inventor",
+      "era": "ERA_3",
+      "minPlayers": 3,
+      "inventorIcon": "BOAT"
+    },
+    {
+      "cardID": "082",
+      "type": "Inventor",
+      "era": "ERA_3",
+      "minPlayers": 2,
+      "inventorIcon": "BREAD"
+    },
+    {
+      "cardID": "083",
+      "type": "Inventor",
+      "era": "ERA_3",
+      "minPlayers": 4,
+      "inventorIcon": "NECKLACE"
+    },
+    {
+      "cardID": "084",
+      "type": "Inventor",
+      "era": "ERA_3",
+      "minPlayers": 3,
+      "inventorIcon": "ARROW"
+    },
+    {
+      "cardID": "085",
+      "type": "Hunting",
+      "era": "ERA_1",
+      "minPlayers": 2,
+      "bonusPoint": 1
+    },
+    {
+      "cardID": "086",
+      "type": "Hunting",
+      "era": "ERA_2",
+      "minPlayers": 2,
+      "bonusPoint": 2
+    },
+    {
+      "cardID": "087",
+      "type": "Hunting",
+      "era": "ERA_3",
+      "minPlayers": 2,
+      "bonusPoint": 3
+    },
+    {
+      "cardID": "088",
+      "type": "Ritual",
+      "era": "ERA_1",
+      "minPlayers": 2,
+      "isFinalEvent": false,
+      "bonusPoints": 5,
+      "malusPoints": 3
+    },
+    {
+      "cardID": "089",
+      "type": "Ritual",
+      "era": "ERA_2",
+      "minPlayers": 2,
+      "isFinalEvent": false,
+      "bonusPoints": 10,
+      "malusPoints": 5
+    },
+    {
+      "cardID": "090",
+      "type": "Ritual",
+      "era": "ERA_3",
+      "minPlayers": 2,
+      "isFinalEvent": true,
+      "bonusPoints": 15,
+      "malusPoints": 7
+    },
+    {
+      "cardID": "091",
+      "type": "Sustenance",
+      "era": "ERA_1",
+      "minPlayers": 2,
+      "isFinalEvent": false,
+      "malusPoints": 1
+    },
+    {
+      "cardID": "092",
+      "type": "Sustenance",
+      "era": "ERA_2",
+      "minPlayers": 2,
+      "isFinalEvent": false,
+      "malusPoints": 2
+    },
+    {
+      "cardID": "093",
+      "type": "Sustenance",
+      "era": "ERA_3",
+      "minPlayers": 2,
+      "isFinalEvent": true,
+      "malusPoints": 3
+    },
+    {
+      "cardID": "094",
+      "type": "Paintings",
+      "era": "ERA_1",
+      "minPlayers": 2,
+      "minPainters": 1,
+      "bonusPoints": 1
+    },
+    {
+      "cardID": "095",
+      "type": "Paintings",
+      "era": "ERA_2",
+      "minPlayers": 2,
+      "minPainters": 2,
+      "bonusPoints": 2
+    },
+    {
+      "cardID": "096",
+      "type": "Paintings",
+      "era": "ERA_3",
+      "minPlayers": 2,
+      "minPainters": 3,
+      "bonusPoints": 3
+    }
+  ],
+  "buildingCards": [
+    {
+      "cardID": "097",
+      "type": "InventorPair",
+      "era": "ERA_1",
+      "minPlayers": 2,
+      "foodCost": 3,
+      "endOfGamePP": 4
+    },
+    {
+      "cardID": "098",
+      "type": "TotemFoodBonus",
+      "era": "ERA_1",
+      "minPlayers": 2,
+      "foodCost": 3,
+      "endOfGamePP": 3
+    },
+    {
+      "cardID": "099",
+      "type": "SixSet",
+      "era": "ERA_1",
+      "minPlayers": 2,
+      "foodCost": 4,
+      "endOfGamePP": 3
+    },
+    {
+      "cardID": "100",
+      "type": "SustenanceBonusGatherer",
+      "era": "ERA_1",
+      "minPlayers": 2,
+      "foodCost": 4,
+      "endOfGamePP": 4
+    },
+    {
+      "cardID": "101",
+      "type": "SustenanceBonusPainter",
+      "era": "ERA_1",
+      "minPlayers": 2,
+      "foodCost": 5,
+      "endOfGamePP": 3
+    },
+    {
+      "cardID": "102",
+      "type": "RitualSave",
+      "era": "ERA_1",
+      "minPlayers": 2,
+      "foodCost": 5,
+      "endOfGamePP": 2
+    },
+    {
+      "cardID": "103",
+      "type": "ritualPPMultiplier",
+      "era": "ERA_2",
+      "minPlayers": 2,
+      "foodCost": 7,
+      "endOfGamePP": 0
+    },
+    {
+      "cardID": "104",
+      "type": "ritualPPMultiplier",
+      "era": "ERA_2",
+      "minPlayers": 2,
+      "foodCost": 7,
+      "endOfGamePP": 0
+    },
+    {
+      "cardID": "105",
+      "type": "PaintingFoodBonus",
+      "era": "ERA_2",
+      "minPlayers": 2,
+      "foodCost": 5,
+      "endOfGamePP": 6
+    },
+    {
+      "cardID": "106",
+      "type": "HuntBonus",
+      "era": "ERA_2",
+      "minPlayers": 2,
+      "foodCost": 7,
+      "endOfGamePP": 2
+    },
+    {
+      "cardID": "107",
+      "type": "SustenanceBonusInventor",
+      "era": "ERA_2",
+      "minPlayers": 2,
+      "foodCost": 7,
+      "endOfGamePP": 4
+    },
+    {
+      "cardID": "108",
+      "type": "RitualStarBonus",
+      "era": "ERA_2",
+      "minPlayers": 2,
+      "foodCost": 6,
+      "endOfGamePP": 4
+    },
+    {
+      "cardID": "109",
+      "type": "DoubleBuilderPP",
+      "era": "ERA_2",
+      "minPlayers": 2,
+      "foodCost": 6,
+      "endOfGamePP": 4
+    },
+    {
+      "cardID": "109",
+      "type": "uniqueSixSet",
+      "era": "ERA_2",
+      "minPlayers": 2,
+      "foodCost": 5,
+      "endOfGamePP": 6
+    },
+    {
+      "cardID": "110",
+      "type": "TotemFoodBonus",
+      "era": "ERA_3",
+      "minPlayers": 2,
+      "foodCost": 9,
+      "endOfGamePP": 3
+    },
+    {
+      "cardID": "111",
+      "type": "CharacterBonusGatherer",
+      "era": "ERA_3",
+      "minPlayers": 2,
+      "foodCost": 7,
+      "endOfGamePP": 6
+    },
+    {
+      "cardID": "112",
+      "type": "CharacterBonusInventor",
+      "era": "ERA_3",
+      "minPlayers": 2,
+      "foodCost": 6,
+      "endOfGamePP": 6
+    },
+    {
+      "cardID": "113",
+      "type": "CharacterBonusHunter",
+      "era": "ERA_3",
+      "minPlayers": 2,
+      "foodCost": 8,
+      "endOfGamePP": 8
+    },
+    {
+      "cardID": "114",
+      "type": "CharacterBonusBuilder",
+      "era": "ERA_3",
+      "minPlayers": 2,
+      "foodCost": 6,
+      "endOfGamePP": 3
+    },
+    {
+      "cardID": "115",
+      "type": "CharacterBonusPainter",
+      "era": "ERA_3",
+      "minPlayers": 2,
+      "foodCost": 7,
+      "endOfGamePP": 4
+    },
+    {
+      "cardID": "116",
+      "type": "Bonus25PP",
+      "era": "ERA_3",
+      "minPlayers": 2,
+      "foodCost": 10,
+      "endOfGamePP": 0
+    },
+    {
+      "cardID": "117",
+      "type": "CharacterBonusShaman",
+      "era": "ERA_3",
+      "minPlayers": 2,
+      "foodCost": 7,
+      "endOfGamePP": 4
+    }
+  ]
+}

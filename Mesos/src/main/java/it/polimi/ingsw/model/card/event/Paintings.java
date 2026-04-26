@@ -1,6 +1,7 @@
 package it.polimi.ingsw.model.card.event;
 
 import it.polimi.ingsw.model.Player;
+import it.polimi.ingsw.model.card.BuildingCard;
 import it.polimi.ingsw.model.card.EventCard;
 import it.polimi.ingsw.model.card.character.Artist;
 import it.polimi.ingsw.model.enums.Era;
@@ -32,14 +33,16 @@ public class Paintings extends EventCard {
 
     @Override
     public void applyEffect(List<Player> players) {
-        for (Player p : players) {
-            int count = p.getPlayerHand().stream()
-                    .filter(card -> card instanceof Artist)
-                    .count();
+        for (Player player : players) {
+            int count = player.getCounterArtist();
             if (count >= minPainters) {
-                p.changePP(this.bonusPoints*count);
+                player.changePP(this.bonusPoints*count);
             }
-            else { p.changePP(-2); }
+            else { player.changePP(-2); }
+            List<BuildingCard> buildings = player.getPlayerBuildings();
+            for (BuildingCard card : buildings) {
+                player.changeFood(card.hasPaintingBonus(player)? player.getCounterArtist() : 0);
+            }
         }
     }
 }

@@ -1,7 +1,9 @@
 package it.polimi.ingsw.model.card.event;
 
 import it.polimi.ingsw.model.Player;
+import it.polimi.ingsw.model.card.BuildingCard;
 import it.polimi.ingsw.model.card.EventCard;
+import it.polimi.ingsw.model.card.building.RitualSave;
 import it.polimi.ingsw.model.enums.Era;
 
 import java.util.List;
@@ -33,34 +35,53 @@ public class Ritual extends EventCard {
     }
     public void setBonusPoints(int bonusPoints) {this.bonusPoints = bonusPoints;}
     public void setMalusPoints(int malusPoints) {this.malusPoints = malusPoints;}
-
+//  FIXME: @Screpes implementa gli effetti delle building nel workflow
     @Override
     public void applyEffect(List<Player> players) {
         int maxStars = players.stream()
-                .mapToInt(Player::getStars)
+                .mapToInt(Player::getStarCounter)
                 .max()
                 .orElse(0);
 
         int minStars = players.stream()
-                .mapToInt(Player::getStars)
+                .mapToInt(Player::getStarCounter)
                 .min()
                 .orElse(0);
 
         if(maxStars == minStars){
             for(Player player : players){
-                player.changePP(this.bonusPoints);
-                player.changePP(-this.malusPoints);
+                List<BuildingCard> buildings = player.getPlayerBuildings();
+                int bonusVal=1;
+                int safeVal=1;
+                for (BuildingCard card : buildings) {
+                    //bonusVal return 2 if the player
+                    bonusVal *= card.checkDoubleStarRitual(player);
+                    safeVal *= card.checkRitualSafe(player);
+                }
+                player.changePP(this.bonusPoints*bonusVal);
+                player.changePP(-this.malusPoints* safeVal);
             }
             return;
         }
 
         for(Player player : players){
-            if(player.getStars()==maxStars){
-                player.changePP(this.bonusPoints);
+            if(player.getStarCounter()==maxStars){
+                List<BuildingCard> buildings = player.getPlayerBuildings();
+                int bonusVal=1;
+                for (BuildingCard card : buildings) {
+                    //bonusVal return 2 if the player
+                    bonusVal *= card.checkDoubleStarRitual(player);
+                }
+                player.changePP(this.bonusPoints*bonusVal);
             }
 
-            if(player.getStars()==minStars){
-                player.changePP(-this.malusPoints);
+            if(player.getStarCounter()==minStars){
+                List<BuildingCard> buildings = player.getPlayerBuildings();
+                int safeVal=1;
+                for (BuildingCard card : buildings) {
+                    safeVal *= card.checkRitualSafe(player);
+                }
+                player.changePP(-this.malusPoints* safeVal);
             }
         }
     }
