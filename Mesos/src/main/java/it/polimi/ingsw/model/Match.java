@@ -14,7 +14,7 @@ public class Match {
     private final Date date = new Date();
     private final List<Player> playersList = new ArrayList<>();
     private int currentRound = 0;
-    private Era currentEra = Era.ERA_I;
+    private Era currentEra = Era.ERA_1;
     private int currentPlayersNumber = 0;
     private Board board;
     private Decks decks;

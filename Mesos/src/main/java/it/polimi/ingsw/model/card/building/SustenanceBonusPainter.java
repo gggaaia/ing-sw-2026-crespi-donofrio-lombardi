@@ -11,4 +11,5 @@ public class SustenanceBonusPainter extends EventActivatedBuilding{
     @Override
     public int sustenanceBonus(Player player) {
         return(player==getOwner()? player.getPainterCounter() : 0);
+    }
 }
