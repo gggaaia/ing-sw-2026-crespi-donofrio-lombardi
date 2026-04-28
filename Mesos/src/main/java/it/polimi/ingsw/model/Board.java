@@ -15,6 +15,21 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class Board {
+    /**
+     * Lookup table for the number of building cards added to the upper row
+     * at the start of each era, indexed by {@code [numPlayers - 2][era.ordinal()]}.
+     * <p>
+     * Rows correspond to player counts (2..5 players) and columns to eras
+     * ({@link Era#ERA_1}, {@link Era#ERA_2}, {@link Era#ERA_3}); this matches
+     * the rulebook table for step 6 of the setup.
+     */
+    private static final int[][] BUILDINGS_PER_ERA = {
+            { 1, 2, 3 }, // 2 players
+            { 2, 2, 4 }, // 3 players
+            { 2, 3, 4 }, // 4 players
+            { 2, 3, 5 }, // 5 players
+    };
+
     private CardRow upperRow = new CardRow();
     private CardRow lowerRow = new CardRow();
     private List<OfferingTile> offeringTrack;
@@ -52,16 +67,115 @@ public class Board {
 
 
 
-    public void setupLower(Decks d, int numPlayers) {
-        // TODO
+    /**
+     * Initializes the lower row at the start of the match by drawing
+     * {@code numPlayers + 1} non-event tribe cards from the tribe deck.
+     * <p>
+     * Cards are drawn one at a time via {@link Decks#drawTribe()}. For each
+     * drawn card, {@link Card#firstRoundChangeRow(CardRow)} is invoked with
+     * the {@link #upperRow} as the target:
+     * <ul>
+     *   <li>If the card is an event, it adds itself to the upper row and the
+     *       method returns {@code true}; the draw counter is <b>not</b>
+     *       incremented and another card is drawn.</li>
+     *   <li>If the card is a character, the default implementation returns
+     *       {@code false} without modifying any row; the card is then placed
+     *       on the lower row via {@link Card#addToRow(CardRow)} and the
+     *       counter is incremented.</li>
+     * </ul>
+     * The loop continues until the lower row holds exactly {@code numPlayers + 1}
+     * non-event tribe cards.
+     *
+     * @param d          the decks to draw tribe cards from
+     * @param numPlayers the number of players in the match
+     * @throws EmptyDeckException if the tribe deck runs out of cards before
+     *                            the lower row is fully populated
+     */
+    public void setupLower(Decks d, int numPlayers) throws EmptyDeckException {
+        int cardsToAdd = numPlayers + 1;
+        int addedCards = 0;
+        while (addedCards < cardsToAdd) {
+            Card drawnCard = d.drawTribe();
+            boolean movedToUpper = drawnCard.firstRoundChangeRow(this.upperRow);
+            if (!movedToUpper) {
+                drawnCard.addToRow(this.lowerRow);
+                addedCards++;
+            }
+        }
     }
 
-    public void newUpper(Decks d, int numPlayers) {
-    // TODO
+    /**
+     * Refills the upper row with tribe cards drawn from the tribe deck.
+     * <p>
+     * The target size of the upper row is {@code numPlayers + 4} tribe cards
+     * (characters plus events). Any tribe cards already present in the upper
+     * row count toward this target; only the missing cards are drawn. This
+     * matters at the start of the match, where {@link #setupLower(Decks, int)}
+     * may have diverted some event cards to the upper row, so the number of
+     * cards drawn here is reduced accordingly.
+     * <p>
+     * In rounds after the first, {@link #shiftUpToLow()} empties the upper
+     * row of all tribe cards before this method is called, so the full
+     * {@code numPlayers + 4} cards are drawn.
+     * <p>
+     * Each drawn card is dispatched to the correct internal list of the
+     * upper row via {@link Card#addToRow(CardRow)} (characters and events
+     * are stored separately in {@link CardRow}).
+     *
+     * @param d          the decks to draw tribe cards from
+     * @param numPlayers the number of players in the match
+     * @throws EmptyDeckException if the tribe deck runs out of cards before
+     *                            the upper row reaches the target size
+     */
+    public void newUpper(Decks d, int numPlayers) throws EmptyDeckException {
+        int target = numPlayers + 4;
+        int current = this.upperRow.getCharacterCards().size()
+                + this.upperRow.getEventCards().size();
+        int cardsToAdd = target - current;
+        for (int i = 0; i < cardsToAdd; i++) {
+            Card drawnCard = d.drawTribe();
+            drawnCard.addToRow(this.upperRow);
+        }
     }
 
-    public void newUpperBuilding(Decks d, Era era) {
-    // TODO
+    /**
+     * Refills the upper row with building cards of the given era, drawn
+     * from the building deck.
+     * <p>
+     * The number of buildings to add is determined by the {@link #BUILDINGS_PER_ERA}
+     * lookup table (era and player count). The upper row's building list is
+     * assumed to be empty when this method is called (e.g. immediately after
+     * {@link #shiftBuildingsDown()} or at game start).
+     * <p>
+     * Because {@link Decks#drawBuilding()} draws from the top of a deck that
+     * is sorted era-first, leftover buildings from previous eras may sit on
+     * top of the deck when called for {@code ERA_2} or {@code ERA_3}. Any card
+     * whose era does not match the requested {@code era} is silently
+     * discarded (not added to the upper row, not placed in any pile) and
+     * drawing continues. This implements the "buildings of previous eras are
+     * discarded at the era change" rule.
+     *
+     * @param d          the decks to draw building cards from
+     * @param era        the era of the buildings to place on the upper row
+     * @param numPlayers the number of players in the match
+     * @throws EmptyDeckException if the building deck runs out of cards
+     *                            before enough cards of the requested era
+     *                            are drawn
+     */
+    public void newUpperBuilding(Decks d, Era era, int numPlayers) throws EmptyDeckException {
+        // Example: era=ERA_2, numPlayers=3
+        //   -> era.ordinal() = 1 (ERA_1=0, ERA_2=1, ERA_3=2)
+        //   -> numPlayers - 2 = 1 (row index for 3-player count)
+        //   -> BUILDINGS_PER_ERA[1][1] = 2 buildings to draw
+        int target = BUILDINGS_PER_ERA[numPlayers - 2][era.ordinal()];
+        int addedCards = 0;
+        while (addedCards < target) {
+            Card drawnCard = d.drawBuilding();
+            if (drawnCard.getEra() == era) {
+                drawnCard.addToRow(this.upperRow);
+                addedCards++;
+            }
+        }
     }
 
 
