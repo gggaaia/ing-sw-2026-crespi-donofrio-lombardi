@@ -1,5 +1,6 @@
 package it.polimi.ingsw.model;
 
+import it.polimi.ingsw.exceptions.DeckLoadException;
 import it.polimi.ingsw.model.card.BuildingCard;
 import it.polimi.ingsw.model.card.EventCard;
 import it.polimi.ingsw.model.enums.Era;
@@ -39,12 +40,15 @@ public class Match {
 
         // Get last 6 digits of seconds
         long last_6_digits_of_seconds = seconds % 1000000;
-
         // Get milliseconds part (0-999)
         long milliseconds = now % 1000;
 
         // Unique ID for the match based on the time of creation (9 digits)
         this.matchID = (int) (last_6_digits_of_seconds * 1000 + milliseconds);
+
+        // Initialize board and decks
+        this.board = new Board();
+        this.decks = new Decks();
     }
 
     public int getMatchID() {
@@ -52,28 +56,119 @@ public class Match {
     }
 
     public void addPlayer(Match m, Player p) {
+        if (!playersList.contains(p)) {
+            playersList.add(p);
+        }
     }
 
     public void removePlayer(Player p) {
+        if (playersList.contains(p)) {
+            playersList.remove(p);
+        }
     }
 
     public void savePoints() {
+        // TODO: database saving functionality
     }
 
-    public void startMatch() {
+    /**
+     * Initializes the match, setting up all game components according to the current number of players.
+     * <p>
+     * Specifically, this method:
+     * <ul>
+     *   <li>Sets the current round to 1,</li>
+     *   <li>Populates the decks with the appropriate cards for the number of players,</li>
+     *   <li>Sets up the offering tiles on the board,</li>
+     *   <li>Sets up the turn order tiles on the board,</li>
+     *   <li>Sets up the lower card row on the board,</li>
+     *   <li>Sets up the upper card row on the board, and</li>
+     *   <li>Sets up the upper building row on the board.</li>
+     * </ul>
+     *
+     * @throws DeckLoadException if the player count is invalid or the cards file cannot be loaded
+     */
+    public void startMatch() throws DeckLoadException {
+        this.currentRound = 1;
+
+        int numPlayers = playersList.size();
+
+        decks.populateDecks(numPlayers);
+
+        board.setupOfferingTiles(numPlayers);
+
+        board.setupTurnOrderTiles(numPlayers);
+
+        board.setupLower(decks, numPlayers);
+
+        board.newUpper(decks, numPlayers);
+
+        board.newUpperBuilding(decks, Era.ERA_1);
     }
 
     public void endMatch() {
+        resolveEndMatch();
+        // TODO: saving to database functionality
     }
 
+    /**
+     * Advances the match to the next round.
+     * <p>
+     * This method:
+     * <ul>
+     *   <li>Increments the current round counter,</li>
+     *   <li>Captures the current era from the board before any modification,</li>
+     *   <li>Shifts the upper row of cards down to the lower row,</li>
+     *   <li>Refills the upper row with new cards from the deck, and</li>
+     *   <li>Captures the current era again to detect if a new era has been triggered.</li>
+     * </ul>
+     * If the era has advanced (it can only ever increase), {@link #moveToNextEra(Era)} is called
+     * with the new era.
+     */
     public void moveToNextRound() {
+        this.currentRound++;
+
+        Era previousEra = board.getCurrentEra();
+
+        board.shiftUpToLow();
+
+        board.newUpper(decks, playersList.size());
+
+        Era updatedEra = board.getCurrentEra();
+        if (updatedEra.compareTo(previousEra) > 0) {
+            moveToNextEra(updatedEra);
+        }
     }
 
-    public void moveToNextEra() {
+    /**
+     * Advances the match to the specified era.
+     * <p>
+     * This method:
+     * <ul>
+     *   <li>Updates the match's current era to the given {@code newEra},</li>
+     *   <li>Shifts the building cards on the board down, and</li>
+     *   <li>Refills the upper building row with new buildings of the given era.</li>
+     * </ul>
+     *
+     * @param newEra the new {@link Era} the match should transition to
+     */
+    public void moveToNextEra(Era newEra) {
+        this.currentEra = newEra;
+
+        board.shiftBuildingsDown();
+
+        board.newUpperBuilding(decks, newEra);
     }
 
+    /**
+     * Creates and returns a leaderboard of players in the match, sorted in descending order
+     * by their prestige points (i.e., players with more prestige points come first).
+     *
+     * @return a {@code List<Player>} representing the sorted leaderboard
+     */
     public List<Player> createLeaderboard() {
-        return null;
+        List<Player> leaderboard = new ArrayList<>(playersList);
+        leaderboard.sort((player1, player2) -> Integer.compare(player2.getPrestigePoints(), player1.getPrestigePoints()));
+        return leaderboard;
     }
 
     /**
