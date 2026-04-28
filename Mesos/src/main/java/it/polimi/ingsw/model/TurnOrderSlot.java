@@ -1,13 +1,15 @@
 package it.polimi.ingsw.model;
 
+import it.polimi.ingsw.model.enums.TotemColor;
+
 public class TurnOrderSlot {
     private int food;
     private int PP;
-    private String nickname;
+    private TotemColor totemColor;
 
     /**
      * Constructs a TurnOrderSlot with specified food and PP bonuses.
-     * The slot is initialized as unoccupied (no nickname).
+     * The slot is initialized as unoccupied (no totem).
      *
      * @param food the food bonus associated with the slot
      * @param PP the PP (Power Point) bonus associated with the slot
@@ -15,7 +17,7 @@ public class TurnOrderSlot {
     public TurnOrderSlot(int food, int PP) {
         this.food = food;
         this.PP = PP;
-        this.nickname = null;
+        this.totemColor = null;
     }
 
     public int getFood() {
@@ -26,30 +28,30 @@ public class TurnOrderSlot {
         return PP;
     }
 
-    public String getNickname() {
-        return nickname;
+    public TotemColor getTotemColor() {
+        return totemColor;
     }
 
 
-    public void setNickname(String nickname) {
-        this.nickname = nickname;
+    public void setTotemColor(TotemColor totemColor) {
+        this.totemColor = totemColor;
     }
 
 
     /**
-     * Checks if this turn order slot is occupied by a player's totem (nickname).
+     * Checks if this turn order slot is occupied by a player's totem.
      *
-     * @return true if the slot is occupied (nickname is not null), false otherwise
+     * @return true if the slot is occupied (totemColor is not null), false otherwise
      */
     public boolean isOccupied() {
-        return nickname != null;
+        return totemColor != null;
     }
 
 
     /**
-     * Removes the totem (player's nickname) from this turn order slot.
+     * Removes the totem from this turn order slot.
      * If the slot is not occupied, returns false.
-     * If the slot is occupied, removes the nickname and returns true.
+     * If the slot is occupied, removes the totem and returns true.
      *
      * @return true if the totem was removed, false if the slot was not occupied
      */
@@ -57,7 +59,7 @@ public class TurnOrderSlot {
         if (!isOccupied()) {
             return false;
         }
-        this.nickname = null;
+        this.totemColor = null;
         return true;
     }
 }
