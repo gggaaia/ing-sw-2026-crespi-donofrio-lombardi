@@ -14,9 +14,10 @@ public class InventorPair extends BuildingCard {
     @Override
     public void applyEndRoundEffect(Player player) {
         if (player == getOwner()) {
-           //avrebbe senso avere una lista di ICON che viene aggiornata quando peschi l'inventore, conto quante icon ci
-            //sono nella lista, poi faccio la filter e prendo solo le istanze singole senza duplicati e faccio la count
-            //divido il numero di icone totali per il numero di icone singole
+           int count= player.countInventorPair();
+           int pairPresent= player.getInventorPairs();
+           player.changeFood(count-pairPresent);
+           player.increaseInventorPairs(3*(count-pairPresent));
         }
     }
 }

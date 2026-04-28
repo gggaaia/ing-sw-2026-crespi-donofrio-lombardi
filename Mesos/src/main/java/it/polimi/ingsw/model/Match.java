@@ -101,8 +101,7 @@ public class Match {
 
     public void resolveEndMatch() {
         for (Player player : playersList) {
-            //TODO: implements the InventorIconCount
-            player.changePP(player.getInventorCounter()*/*contatore icone diverse*/);
+            player.changePP(player.getInventorCounter()*player.countDistinctInventorIcons());
             player.changePP(10*(player.getPainterCounter()/2));
             List<BuildingCard> buildings = player.getPlayerBuildings();
             for (BuildingCard card : buildings) {
