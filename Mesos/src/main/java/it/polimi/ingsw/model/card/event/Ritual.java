@@ -37,7 +37,7 @@ public class Ritual extends EventCard {
     public void setMalusPoints(int malusPoints) {this.malusPoints = malusPoints;}
 //  FIXME: @Screpes implementa gli effetti delle building nel workflow
     @Override
-    public void applyEffect(List<Player> players) {
+    public void applyEvent(List<Player> players) {
         int maxStars = players.stream()
                 .mapToInt(Player::getStarCounter)
                 .max()

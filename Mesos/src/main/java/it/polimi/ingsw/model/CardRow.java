@@ -16,7 +16,6 @@ public class CardRow {
         this.buildingCards = new ArrayList<>();
     }
 
-
     public void addCard(Card c) {
         c.addToRow(this);
     }

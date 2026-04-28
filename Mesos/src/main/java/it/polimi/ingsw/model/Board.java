@@ -20,6 +20,9 @@ public class Board {
     private List<OfferingTile> offeringTrack;
     private TurnOrderTile turnOrderTile;
 
+    public CardRow getUpperRow() {return upperRow;}
+    public CardRow getLowerRow() {return lowerRow;}
+
     /**
      * Initializes the offering track for the board with all eligible offering tiles
      * according to the current number of players in the match.

@@ -2,10 +2,12 @@ package it.polimi.ingsw.model;
 
 import it.polimi.ingsw.model.card.BuildingCard;
 import it.polimi.ingsw.model.card.CharacterCard;
+import it.polimi.ingsw.model.enums.InventorIcon;
 import it.polimi.ingsw.model.enums.TotemColor;
 import it.polimi.ingsw.model.state.NotPlaying;
 import it.polimi.ingsw.model.state.PlayerState;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.List;
 
 public class Player {
@@ -25,6 +27,7 @@ public class Player {
     private int foodDiscountGatherer;
     private int ppBuilderBonus;
     private int sixSetCounter;
+    private int InventorPairs;
     private List<CharacterCard> playerHand;
     private List<BuildingCard> playerBuildings;
     private PlayerState playerState;
@@ -53,6 +56,7 @@ public class Player {
         this.foodDiscountGatherer = 0;
         this.ppBuilderBonus = 0;
         this.sixSetCounter = 0;
+        this.InventorPairs = 0;
         this.hasBuilding = false;
         this.playerHand = new ArrayList<>();
         this.playerBuildings = new ArrayList<>();
@@ -211,6 +215,7 @@ public class Player {
     public void increaseSixSetCounter(int amount) {
         this.sixSetCounter += amount;
     }
+    public void increaseInventorPairs(int amount) {this.InventorPairs += amount;}
 
     /**
      * Updates the current state of the player during the match.
@@ -289,11 +294,36 @@ public class Player {
         return foodDiscountGatherer;
     }
 
-    public int getPpBuilderBonus() {
+    public int getPPBuilderBonus() {
         return ppBuilderBonus;
     }
 
     public int getSixSetCounter() {
         return sixSetCounter;
+    }
+
+    public int getInventorPairs() { return InventorPairs; }
+
+    //Return the number of inventorPair present at the moment in the player hand
+    public int countInventorPair(){
+        EnumMap<InventorIcon, Integer> iconCounts = new EnumMap<>(InventorIcon.class);
+        for(CharacterCard card : this.playerHand){
+            InventorIcon inventorIcon=card.getInventorIcon();
+            if(inventorIcon!=null){
+                iconCounts.merge(inventorIcon, 1, Integer::sum);
+            }
+        }
+        return iconCounts.values().stream().mapToInt(count->count/2).sum();
+    }
+
+    public int countDistinctInventorIcons() {
+        java.util.Set<InventorIcon> distinctIcons = new java.util.HashSet<>();
+        for (CharacterCard card : this.playerHand) {
+            InventorIcon icon = card.getInventorIcon();
+            if (icon != null) {
+                distinctIcons.add(icon);
+            }
+        }
+        return distinctIcons.size();
     }
 }

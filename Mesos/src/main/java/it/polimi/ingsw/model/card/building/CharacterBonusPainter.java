@@ -9,7 +9,7 @@ public class CharacterBonusPainter extends EndOfMatchBuilding{
     }
 
     @Override
-    public void applyEffect(Player player) {
-        player.changePP(player==getOwner()? 4*(player.getCounterPainter()) : 0);
+    public void applyEndEffect(Player player) {
+        player.changePP(player==getOwner()? 4*(player.getPainterCounter()) : 0);
     }
 }

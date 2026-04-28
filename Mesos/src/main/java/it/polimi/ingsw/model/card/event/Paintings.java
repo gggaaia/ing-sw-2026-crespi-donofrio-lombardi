@@ -32,16 +32,16 @@ public class Paintings extends EventCard {
     }
 
     @Override
-    public void applyEffect(List<Player> players) {
+    public void applyEvent(List<Player> players) {
         for (Player player : players) {
-            int count = player.getCounterArtist();
+            int count = player.getPainterCounter();
             if (count >= minPainters) {
                 player.changePP(this.bonusPoints*count);
             }
             else { player.changePP(-2); }
             List<BuildingCard> buildings = player.getPlayerBuildings();
             for (BuildingCard card : buildings) {
-                player.changeFood(card.hasPaintingBonus(player)? player.getCounterArtist() : 0);
+                player.changeFood(card.hasPaintingBonus(player)? player.getPainterCounter() : 0);
             }
         }
     }

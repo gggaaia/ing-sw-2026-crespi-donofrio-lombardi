@@ -9,7 +9,7 @@ public class CharacterBonusHunter extends EndOfMatchBuilding{
     }
 
     @Override
-    public void applyEffect(Player player) {
-        player.changePP(player==getOwner()? 3*(player.getCounterHunter()) : 0);
+    public void applyEndEffect(Player player) {
+        player.changePP(player==getOwner()? 3*(player.getHunterCounter()) : 0);
     }
 }

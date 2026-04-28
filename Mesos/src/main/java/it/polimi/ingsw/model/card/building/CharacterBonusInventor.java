@@ -9,7 +9,7 @@ public class CharacterBonusInventor extends EndOfMatchBuilding{
     }
 
     @Override
-    public void applyEffect(Player player) {
-        player.changePP(player==getOwner()? 2*(player.getCounterInventor()) : 0);
+    public void applyEndEffect(Player player) {
+        player.changePP(player==getOwner()? 2*(player.getInventorCounter()) : 0);
     }
 }

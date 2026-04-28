@@ -9,7 +9,7 @@ public class DoubleBuilderPP extends EndOfMatchBuilding{
     }
     @Override
     //Double the PP builder bonus
-    public void applyEffect(Player player) {
+    public void applyEndEffect(Player player) {
         player.increasePPBuilderBonus(player==getOwner()? player.getPPBuilderBonus() : 0);
     }
 }
