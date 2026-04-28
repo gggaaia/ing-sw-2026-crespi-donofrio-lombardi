@@ -33,6 +33,7 @@ public class CardRow {
         this.eventCards.add(ce);
     }
 
+
     public CharacterCard takeCharacterCard(int position) {
         if (position >= 0 && position < this.characterCards.size()) {
             return this.characterCards.remove(position);

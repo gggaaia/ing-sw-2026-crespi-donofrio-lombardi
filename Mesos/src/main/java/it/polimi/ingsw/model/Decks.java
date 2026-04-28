@@ -36,6 +36,7 @@ import it.polimi.ingsw.model.card.character.Hunter;
 import it.polimi.ingsw.model.card.character.Inventor;
 import it.polimi.ingsw.model.card.character.Shaman;
 import it.polimi.ingsw.model.card.event.Hunting;
+import it.polimi.ingsw.model.enums.Era;
 import it.polimi.ingsw.model.card.event.Paintings;
 import it.polimi.ingsw.model.card.event.Ritual;
 import it.polimi.ingsw.model.card.event.Sustenance;
@@ -47,8 +48,8 @@ import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 public class Decks {
@@ -205,14 +206,91 @@ public class Decks {
         }
     }
 
+    /**
+     * Shuffles both decks while preserving the era-based draw order required
+     * by the game.
+     * <p>
+     * Cards are drawn from the top of each deck (i.e. via
+     * {@link #drawTribe()} / {@link #drawBuilding()}, which remove the first
+     * element), so the list order directly determines the order in which
+     * cards enter play. Eras must be exhausted in sequence: every era 1 card
+     * is drawn before any era 2 card, and every era 2 card before any era 3
+     * card. Within a single era, however, the order must be random.
+     * <p>
+     * For the tribe deck there is an additional constraint: the two
+     * "final event" cards (the {@link Ritual} and {@link Sustenance}
+     * instances whose {@code isFinalEvent} flag is {@code true}, both of
+     * which are era 3) must be the last cards drawn from the deck, after
+     * every other era 3 card.
+     * <p>
+     * The algorithm is the same for both decks: partition the cards into
+     * one list per era, shuffle each list independently, and then
+     * concatenate them in era order. The tribe deck uses an extra
+     * {@code tribeFinalEvents} bucket that is appended after the era 3
+     * cards so the final events are always drawn last (they are still
+     * shuffled among themselves so their relative order is random).
+     * <p>
+     * Both {@link #tribeDeck} and {@link #buildingDeck} are reassigned to
+     * fresh {@link ArrayList} instances; any previously held references
+     * to the old lists become stale.
+     */
     public void shuffleDecks() {
-        Collections.shuffle(this.tribeDeck);
-        this.tribeDeck.sort(Comparator.comparing(Card::getEra));
+        List<TribeCard> tribeEra1 = new ArrayList<>();
+        List<TribeCard> tribeEra2 = new ArrayList<>();
+        List<TribeCard> tribeEra3 = new ArrayList<>();
+        List<TribeCard> tribeFinalEvents = new ArrayList<>();
+        for (TribeCard card : this.tribeDeck) {
+            // Final-event cards (only on Sustenance/Ritual, always era 3) must
+            // be drawn last, so they go to a dedicated list regardless of era.
+            if ((card instanceof Ritual r && r.isFinalEvent())
+                    || (card instanceof Sustenance s && s.isFinalEvent())) {
+                tribeFinalEvents.add(card);
+                continue;
+            }
+            switch (card.getEra()) {
+                case ERA_1 -> tribeEra1.add(card);
+                case ERA_2 -> tribeEra2.add(card);
+                case ERA_3 -> tribeEra3.add(card);
+            }
+        }
+        Collections.shuffle(tribeEra1);
+        Collections.shuffle(tribeEra2);
+        Collections.shuffle(tribeEra3);
+        Collections.shuffle(tribeFinalEvents);
+        this.tribeDeck = new ArrayList<>(
+                tribeEra1.size() + tribeEra2.size() + tribeEra3.size() + tribeFinalEvents.size());
+        this.tribeDeck.addAll(tribeEra1);
+        this.tribeDeck.addAll(tribeEra2);
+        this.tribeDeck.addAll(tribeEra3);
+        this.tribeDeck.addAll(tribeFinalEvents);
 
-        Collections.shuffle(this.buildingDeck);
-        this.buildingDeck.sort(Comparator.comparing(Card::getEra));
+        List<BuildingCard> buildingEra1 = new ArrayList<>();
+        List<BuildingCard> buildingEra2 = new ArrayList<>();
+        List<BuildingCard> buildingEra3 = new ArrayList<>();
+        for (BuildingCard card : this.buildingDeck) {
+            switch (card.getEra()) {
+                case ERA_1 -> buildingEra1.add(card);
+                case ERA_2 -> buildingEra2.add(card);
+                case ERA_3 -> buildingEra3.add(card);
+            }
+        }
+        Collections.shuffle(buildingEra1);
+        Collections.shuffle(buildingEra2);
+        Collections.shuffle(buildingEra3);
+        this.buildingDeck = new ArrayList<>(buildingEra1.size() + buildingEra2.size() + buildingEra3.size());
+        this.buildingDeck.addAll(buildingEra1);
+        this.buildingDeck.addAll(buildingEra2);
+        this.buildingDeck.addAll(buildingEra3);
     }
 
+    /**
+     * Draws and removes the first card from the tribe deck.
+     * <p>
+     * If the tribe deck is empty, an {@link EmptyDeckException} is thrown.
+     *
+     * @return the {@link Card} removed from the top of the tribe deck
+     * @throws EmptyDeckException if the tribe deck is empty
+     */
     public Card drawTribe() throws EmptyDeckException {
         if (this.tribeDeck.isEmpty()) {
             throw new EmptyDeckException("The tribe deck is empty");
@@ -220,6 +298,14 @@ public class Decks {
         return this.tribeDeck.removeFirst();
     }
 
+    /**
+     * Draws and removes the first card from the building deck.
+     * <p>
+     * If the building deck is empty, an {@link EmptyDeckException} is thrown.
+     *
+     * @return the {@link Card} removed from the top of the building deck
+     * @throws EmptyDeckException if the building deck is empty
+     */
     public Card drawBuilding() throws EmptyDeckException {
         if (this.buildingDeck.isEmpty()) {
             throw new EmptyDeckException("The building deck is empty");
@@ -228,8 +314,15 @@ public class Decks {
     }
 
     /**
-     * Plain DTO mirroring the top-level structure of cards.json.
-     * Field names must match the JSON keys exactly.
+     * Plain DTO used only by Gson to deserialize {@code cards.json}.
+     * <p>
+     * The JSON has two top-level arrays ({@code tribeCards} and
+     * {@code buildingCards}); this class mirrors that shape so a single
+     * {@code gson.fromJson(reader, DeckData.class)} call populates both
+     * fields at once. Field names must match the JSON keys exactly.
+     * <p>
+     * Declared {@code static} so Gson can instantiate it via its no-arg
+     * constructor without needing an enclosing {@link Decks} instance.
      */
     private static class DeckData {
         List<TribeCard> tribeCards;

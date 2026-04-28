@@ -1,6 +1,8 @@
 package it.polimi.ingsw.model;
 
+import it.polimi.ingsw.exceptions.EmptyDeckException;
 import it.polimi.ingsw.model.card.BuildingCard;
+import it.polimi.ingsw.model.card.Card;
 import it.polimi.ingsw.model.card.CharacterCard;
 import it.polimi.ingsw.model.card.EventCard;
 import it.polimi.ingsw.model.card.TribeCard;
@@ -13,8 +15,8 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class Board {
-    private CardRow upperRow;
-    private CardRow lowerRow;
+    private CardRow upperRow = new CardRow();
+    private CardRow lowerRow = new CardRow();
     private List<OfferingTile> offeringTrack;
     private TurnOrderTile turnOrderTile;
 
@@ -48,7 +50,7 @@ public class Board {
 
 
     public void setupLower(Decks d, int numPlayers) {
-    // TODO
+        // TODO
     }
 
     public void newUpper(Decks d, int numPlayers) {
