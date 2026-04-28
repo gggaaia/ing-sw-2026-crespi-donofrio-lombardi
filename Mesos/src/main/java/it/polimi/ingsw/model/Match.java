@@ -1,5 +1,6 @@
 package it.polimi.ingsw.model;
 
+import it.polimi.ingsw.exceptions.DeckLoadException;
 import it.polimi.ingsw.model.enums.Era;
 import it.polimi.ingsw.model.state.LobbyState;
 import it.polimi.ingsw.model.state.MatchState;
@@ -43,6 +44,10 @@ public class Match {
 
         // Unique ID for the match based on the time of creation (9 digits)
         this.matchID = (int) (last_6_digits_of_seconds * 1000 + milliseconds);
+        
+        // Initialize board and decks
+        this.board = new Board();
+        this.decks = new Decks();
     }
 
     public int getMatchID() {
@@ -65,18 +70,121 @@ public class Match {
     // TODO: database saving functionality
     }
 
-    public void startMatch() {
+
+    /**
+     * Initializes the match, setting up all game components according to the current number of players.
+     * <p>
+     * Specifically, this method:
+     * <ul>
+     *   <li>Sets the current round to 1,</li>
+     *   <li>Populates the decks with the appropriate cards for the number of players,</li>
+     *   <li>Sets up the offering tiles on the board,</li>
+     *   <li>Sets up the turn order tiles on the board,</li>
+     *   <li>Sets up the lower card row on the board,</li>
+     *   <li>Sets up the upper card row on the board, and</li>
+     *   <li>Sets up the upper building row on the board.</li>
+     * </ul>
+     *
+     * @throws DeckLoadException if the player count is invalid or the cards file cannot be loaded
+     */
+    public void startMatch() throws DeckLoadException {
+        // Set the current round to 1
+        this.currentRound = 1;
+
+        // Get the number of players from the players list
+        int numPlayers = playersList.size();
+        
+        // Populate the decks with cards appropriate for the number of players
+        decks.populateDecks(numPlayers);
+        
+        // Setup offering tiles on the board
+        board.setupOfferingTiles(numPlayers);
+        
+        // Setup turn order tiles on the board
+        board.setupTurnOrderTiles(numPlayers);
+
+        // Setup the lower card row
+        board.setupLower(decks, numPlayers);
+
+        // Setup the upper card row
+        board.newUpper(decks, numPlayers);
+
+        // Setup the upper building row
+        board.newUpperBuilding(decks, Era.ERA_1);
     }
+
 
     public void endMatch() {
+        
+        resolveEndMatch();
+        // TODO: saving to database functionality
+        
     }
 
+
+    /**
+     * Advances the match to the next round.
+     * <p>
+     * This method:
+     * <ul>
+     *   <li>Increments the current round counter,</li>
+     *   <li>Captures the current era from the board before any modification,</li>
+     *   <li>Shifts the upper row of cards down to the lower row,</li>
+     *   <li>Refills the upper row with new cards from the deck, and</li>
+     *   <li>Captures the current era again to detect if a new era has been triggered.</li>
+     * </ul>
+     * If the era has advanced (it can only ever increase), {@link #moveToNextEra(Era)} is called
+     * with the new era.
+     */
     public void moveToNextRound() {
+        // Increment the current round counter
+        this.currentRound++;
+
+        // Capture the era before refilling the upper row
+        Era previousEra = board.getCurrentEra();
+
+        // Shift the upper row down to the lower row
+        board.shiftUpToLow();
+
+        // Refill the upper row with new cards
+        board.newUpper(decks, playersList.size());
+
+        // Re-check the era after refilling: if it increased, advance to the next era
+        Era updatedEra = board.getCurrentEra();
+        if (updatedEra.compareTo(previousEra) > 0) {
+            moveToNextEra(updatedEra);
+        }
     }
 
-    public void moveToNextEra() {
+    /**
+     * Advances the match to the specified era.
+     * <p>
+     * This method:
+     * <ul>
+     *   <li>Updates the match's current era to the given {@code newEra},</li>
+     *   <li>Shifts the building cards on the board down, and</li>
+     *   <li>Refills the upper building row with new buildings of the given era.</li>
+     * </ul>
+     *
+     * @param newEra the new {@link Era} the match should transition to
+     */
+    public void moveToNextEra(Era newEra) {
+        // Update the match's current era
+        this.currentEra = newEra;
+
+        // Shift the building cards down on the board
+        board.shiftBuildingsDown();
+
+        // Refill the upper building row with new buildings of the given era
+        board.newUpperBuilding(decks, newEra);
     }
 
+    /**
+     * Creates and returns a leaderboard of players in the match, sorted in descending order
+     * by their prestige points (i.e., players with more prestige points come first).
+     *
+     * @return a {@code List<Player>} representing the sorted leaderboard
+     */
     public List<Player> createLeaderboard() {
         List<Player> leaderboard = new ArrayList<>(playersList);
         leaderboard.sort((player1, player2) -> Integer.compare(player2.getPrestigePoints(), player1.getPrestigePoints()));
@@ -100,6 +208,7 @@ public class Match {
         return false;
     }
 
+
     public void chooseOfferingTrackPhase() {
     }
 
@@ -115,21 +224,8 @@ public class Match {
     public void resolveBuildings() {
     }
 
-    public void startRound() {
 
-        // TODO: implement the logic of the startRound() method
 
-        // movetoNextRoundi)
 
-        // chooseOfferingTrackPhase():
-        
-        // resolveAllOfferinaTilesEffect():
 
-        // resolveEvents():
-
-        // resolveBuildings():
-    }
-
-    public void createBoard() {
-    }
 }
