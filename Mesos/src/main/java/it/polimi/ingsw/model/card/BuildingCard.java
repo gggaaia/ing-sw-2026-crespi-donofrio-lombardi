@@ -1,5 +1,6 @@
 package it.polimi.ingsw.model.card;
 
+import it.polimi.ingsw.model.CardRow;
 import it.polimi.ingsw.model.Player;
 import it.polimi.ingsw.model.enums.Era;
 
@@ -31,6 +32,11 @@ public class BuildingCard extends Card {
     }
     public void setOwner(Player owner) { this.owner = owner; }
 
+    @Override
+    public void addToRow(CardRow row){
+        row.addBuildingCard(this);
+    }
+
     public void applyEffect(Player player) { }
     public void applyEndEffect(Player player) { }
     public void applyEndRoundEffect(Player player) { }
@@ -39,4 +45,6 @@ public class BuildingCard extends Card {
     public boolean hasPaintingBonus(Player player) {return false;}
     public boolean hasHuntingBonus(Player player) {return false;}
     public int sustenanceBonus(Player player) {return 0;}
+    public boolean hasUpperRowBuilding(Player player) {return false;}
+
 }

@@ -97,6 +97,13 @@ public class Match {
     }
 
     public void resolveAllOfferingTilesEffect() {
+        //get the player order and status
+        //ask the tile how much food to give the player and does it, ask how many top cards, how many bottom cards to get
+        //receive the index of the card the player want, add the card to the player hand, repeat for the number of card needed
+        //ask the player if it wants to buy a building
+        //cycle to new player
+        //when all player are finished it cycle the player hand calling the DrawingUpperRow method if there are more than 0 cards
+        //in the upper row
     }
 
     public void resolveEndMatch() {

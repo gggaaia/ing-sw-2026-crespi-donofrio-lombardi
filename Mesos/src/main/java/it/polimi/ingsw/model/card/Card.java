@@ -47,8 +47,8 @@ public abstract class Card {
      *
      * @param row the {@code CardRow} to which this card should be added
      */
-    public void addToRow(CardRow row) {
-        // TODO: @Simo override in concrete subclasses to add this card to the proper list in the row
-    }
-    public void applyEvent(List<Player> players) {}
+    public void addToRow(CardRow row) { }
+    public boolean firstRoundChangeRow(CardRow row) { return false; }
+    public void applyEvent(List<Player> players) { }
+
 }
