@@ -1,32 +1,41 @@
 package it.polimi.ingsw.model;
 
-import it.polimi.ingsw.model.card.BuildingCard;
-import it.polimi.ingsw.model.card.Card;
-import it.polimi.ingsw.model.card.TribeCard;
+import it.polimi.ingsw.model.card.*;
 
 import java.util.ArrayList;
 import java.util.List;
 
 public class CardRow {
-    private final List<TribeCard> tribeCards;
+    private final List<CharacterCard> characterCards;
+    private final List<EventCard> eventCards;
     private final List<BuildingCard> buildingCards;
 
     public CardRow() {
-        this.tribeCards = new ArrayList<>();
+        this.characterCards = new ArrayList<>();
+        this.eventCards = new ArrayList<>();
         this.buildingCards = new ArrayList<>();
     }
 
+
     public void addCard(Card c) {
-        if (c instanceof TribeCard) {
-            tribeCards.add((TribeCard) c);
-        } else if (c instanceof BuildingCard) {
-            buildingCards.add((BuildingCard) c);
-        }
+        c.addToRow(this); // metodo da implementare in cards
     }
 
-    public TribeCard takeTribeCard(int position) {
-        if (position >= 0 && position < this.tribeCards.size()) {
-            return this.tribeCards.remove(position);
+    public void addCharacterCard(CharacterCard cc) {
+        this.characterCards.add(cc);
+    }
+
+    public void addBuildingCard(BuildingCard cb) {
+        this.buildingCards.add(cb);
+    }
+
+    public void addEventCard(EventCard ce) {
+        this.eventCards.add(ce);
+    }
+
+    public CharacterCard takeCharacterCard(int position) {
+        if (position >= 0 && position < this.characterCards.size()) {
+            return this.characterCards.remove(position);
         }
         return null;
     }
@@ -39,31 +48,43 @@ public class CardRow {
     }
 
     public void discardTribeCards() {
-        this.tribeCards.clear();
+        this.characterCards.clear();
+        this.eventCards.clear();
     }
 
-    public void discardBuildingCards(){
+    public void discardBuildingCards() {
         this.buildingCards.clear();
     }
 
-    public List<TribeCard> extractAllTribeCards() {
-        List<TribeCard> toMove = new ArrayList<>(this.tribeCards);
+    public List<CharacterCard> extractAllCharacterCards() {
+        List<CharacterCard> charactersToMove = new ArrayList<>(this.characterCards);
         //after extracted the row is cleared
-        this.tribeCards.clear();
-        return toMove;
+        this.characterCards.clear();
+        return charactersToMove;
     }
 
-    public List<BuildingCard> extractAllBuildingCards(){
-        List<BuildingCard> toMove = new ArrayList<>(this.buildingCards);
+    public List<EventCard> extractAllEventCards() {
+        List<EventCard> eventsToMove = new ArrayList<>(this.eventCards);
+        //after extracted the row is cleared
+        this.eventCards.clear();
+        return eventsToMove;
+    }
+
+    public List<BuildingCard> extractAllBuildingCards() {
+        List<BuildingCard> buildingsToMove = new ArrayList<>(this.buildingCards);
         this.buildingCards.clear();
-        return toMove;
+        return buildingsToMove;
     }
 
-    public List<TribeCard> getTribeCards() {
-        return new ArrayList<>(this.tribeCards); // it's a copy, for safety
+
+    public List<CharacterCard> getCharacterCards() {
+        return new ArrayList<>(this.characterCards);
+    }
+
+    public List<EventCard> getEventCards() {
+        return new ArrayList<>(this.eventCards);
     }
 
     public List<BuildingCard> getBuildingCards() {
         return new ArrayList<>(this.buildingCards);
-    }
     }
