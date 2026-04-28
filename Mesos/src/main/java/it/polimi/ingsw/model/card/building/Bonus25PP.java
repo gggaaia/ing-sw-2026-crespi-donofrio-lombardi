@@ -8,7 +8,7 @@ public class Bonus25PP extends EndOfMatchBuilding{
         super(cardID, era, minPlayers, foodCost, endOfGamePP, owner);
     }
     @Override
-    public void applyEffect(Player player){
+    public void applyEndEffect(Player player){
         player.changePP(player==getOwner()? 25 : 0);
     }
 }

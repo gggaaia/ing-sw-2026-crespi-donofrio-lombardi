@@ -12,12 +12,12 @@ public class SixSet extends BuildingCard {
     }
 
     @Override
-    public void applyEffect(Player player) {
+    public void applyEndRoundEffect(Player player) {
         if (player == getOwner()) {
             int min = IntStream.of(
                     player.getBuilderCounter(),
                     player.getGathererCounter(),
-                    player.getArtistCounter(),
+                    player.getPainterCounter(),
                     player.getHunterCounter(),
                     player.getShamanCounter(),
                     player.getInventorCounter()

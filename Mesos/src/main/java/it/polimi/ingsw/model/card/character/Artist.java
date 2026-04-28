@@ -10,6 +10,6 @@ public class Artist extends CharacterCard {
     }
 
     public void drawEffect(Player player) {
-        player.increaseCounterArtist(1);
+        player.increasePainterCounter(1);
     }
 }

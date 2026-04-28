@@ -4,6 +4,8 @@ import it.polimi.ingsw.model.CardRow;
 import it.polimi.ingsw.model.Player;
 import it.polimi.ingsw.model.enums.Era;
 
+import java.util.List;
+
 public abstract class Card {
     private int cardID;
     private Era era;
@@ -48,4 +50,5 @@ public abstract class Card {
     public void addToRow(CardRow row) {
         // TODO: @Simo override in concrete subclasses to add this card to the proper list in the row
     }
+    public void applyEvent(List<Player> players) {}
 }

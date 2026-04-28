@@ -23,9 +23,9 @@ public class Hunting extends EventCard {
     }
 
     @Override
-    public void applyEffect(List<Player> players) {
+    public void applyEvent(List<Player> players) {
         for (Player player : players) {
-            int count = player.getCounterHunter();
+            int count = player.getHunterCounter();
             List<BuildingCard> buildings = player.getPlayerBuildings();
             for (BuildingCard card : buildings) {
                 count=(card.hasHuntingBonus(player)? count*2 : count);

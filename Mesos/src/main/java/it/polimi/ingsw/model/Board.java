@@ -11,6 +11,9 @@ public class Board {
     private List<OfferingTile> offeringTrack;
     private TurnOrderTile turnOrderTile;
 
+    public CardRow getUpperRow() {return upperRow;}
+    public CardRow getLowerRow() {return lowerRow;}
+
     public void setupOfferingTiles(int numPlayers) {
     }
 

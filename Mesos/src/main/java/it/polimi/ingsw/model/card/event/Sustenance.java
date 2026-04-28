@@ -36,8 +36,7 @@ public class Sustenance extends EventCard {
     }
 
     @Override
-    public void applyEffect(List<Player> players) {
-        //FIXME: aggiungi la chiamata alle building per ottenere lo sconto
+    public void applyEvent(List<Player> players) {
         for (Player player : players) {
             int count = player.getPlayerHand().size();
             int discount = player.getGathererCounter();

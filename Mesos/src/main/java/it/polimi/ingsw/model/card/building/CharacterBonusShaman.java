@@ -9,7 +9,7 @@ public class CharacterBonusShaman extends EndOfMatchBuilding{
     }
 
     @Override
-    public void applyEffect(Player player) {
-        player.changePP(player==getOwner()? 4*(player.getCounterShaman()) : 0);
+    public void applyEndEffect(Player player) {
+        player.changePP(player==getOwner()? 4*(player.getShamanCounter()) : 0);
     }
 }

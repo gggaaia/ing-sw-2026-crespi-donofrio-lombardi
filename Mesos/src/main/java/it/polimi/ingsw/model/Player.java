@@ -289,7 +289,7 @@ public class Player {
         return foodDiscountGatherer;
     }
 
-    public int getPpBuilderBonus() {
+    public int getPPBuilderBonus() {
         return ppBuilderBonus;
     }
 

@@ -31,12 +31,12 @@ public class BuildingCard extends Card {
     }
     public void setOwner(Player owner) { this.owner = owner; }
 
-    public void applyEffect(){ }
     public void applyEffect(Player player) { }
+    public void applyEndEffect(Player player) { }
+    public void applyEndRoundEffect(Player player) { }
     public int checkRitualSafe(Player player) {return 1;}
     public int checkDoubleStarRitual(Player player) {return 1;}
     public boolean hasPaintingBonus(Player player) {return false;}
     public boolean hasHuntingBonus(Player player) {return false;}
     public int sustenanceBonus(Player player) {return 0;}
-
 }

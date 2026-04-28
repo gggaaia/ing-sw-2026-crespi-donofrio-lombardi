@@ -10,5 +10,5 @@ public abstract class EventCard extends TribeCard {
         super(cardID, era, minPlayers);
     }
 
-    public abstract void applyEffect(List<Player> players);
+    public abstract void applyEvent(List<Player> players);
 }
