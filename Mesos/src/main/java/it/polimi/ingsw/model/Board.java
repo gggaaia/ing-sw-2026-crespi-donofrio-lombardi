@@ -1,5 +1,8 @@
 package it.polimi.ingsw.model;
 
+import it.polimi.ingsw.model.card.TribeCard;
+import it.polimi.ingsw.model.enums.Era;
+
 import java.util.List;
 
 public class Board {
@@ -23,7 +26,7 @@ public class Board {
     public void shiftUpToLow() {
     }
 
-    public void newUpperBuilding(Decks d) {
+    public void newUpperBuilding(Decks d, Era era) {
     }
 
     public void shiftBuildingsDown() {
@@ -38,4 +41,30 @@ public class Board {
 
     public void moveOfferingTrackToTurnOrder() {
     }
+
+    /**
+     * Scans every tribe card currently sitting in the upper row and returns
+     * the highest {@link Era} found among them.
+     * <p>
+     * The comparison relies on the natural order of the {@code Era} enum
+     * (i.e. {@code ERA_1 < ERA_2 < ERA_3}). If the upper row is empty, the
+     * earliest era ({@link Era#ERA_1}) is returned as a default.
+     *
+     * @return the highest {@code Era} present among the tribe cards in the upper
+     *         row
+     */
+    public Era getCurrentEra() {
+        Era highest = Era.ERA_1;
+
+        for (TribeCard card : upperRow.getCharacterCards()) {
+            if (card.getEra().compareTo(highest) > 0) {
+                highest = card.getEra();
+            }
+        }
+
+        return highest;
+    }
+
+
+
 }

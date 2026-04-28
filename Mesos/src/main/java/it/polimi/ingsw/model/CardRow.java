@@ -18,7 +18,7 @@ public class CardRow {
 
 
     public void addCard(Card c) {
-        c.addToRow(this); // metodo da implementare in cards
+        c.addToRow(this);
     }
 
     public void addCharacterCard(CharacterCard cc) {
@@ -88,3 +88,5 @@ public class CardRow {
     public List<BuildingCard> getBuildingCards() {
         return new ArrayList<>(this.buildingCards);
     }
+
+}
