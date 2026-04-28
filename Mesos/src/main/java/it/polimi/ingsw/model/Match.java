@@ -1,6 +1,7 @@
 package it.polimi.ingsw.model;
 
 import it.polimi.ingsw.exceptions.DeckLoadException;
+import it.polimi.ingsw.exceptions.EmptyDeckException;
 import it.polimi.ingsw.model.card.BuildingCard;
 import it.polimi.ingsw.model.card.EventCard;
 import it.polimi.ingsw.model.enums.Era;
@@ -85,9 +86,10 @@ public class Match {
      *   <li>Sets up the upper building row on the board.</li>
      * </ul>
      *
-     * @throws DeckLoadException if the player count is invalid or the cards file cannot be loaded
+     * @throws DeckLoadException  if the player count is invalid or the cards file cannot be loaded
+     * @throws EmptyDeckException if a deck runs out of cards while populating the board rows
      */
-    public void startMatch() throws DeckLoadException {
+    public void startMatch() throws DeckLoadException, EmptyDeckException {
         this.currentRound = 1;
 
         int numPlayers = playersList.size();
@@ -102,7 +104,7 @@ public class Match {
 
         board.newUpper(decks, numPlayers);
 
-        board.newUpperBuilding(decks, Era.ERA_1);
+        board.newUpperBuilding(decks, Era.ERA_1, numPlayers);
     }
 
     public void endMatch() {
@@ -123,8 +125,10 @@ public class Match {
      * </ul>
      * If the era has advanced (it can only ever increase), {@link #moveToNextEra(Era)} is called
      * with the new era.
+     *
+     * @throws EmptyDeckException if a deck runs out of cards while refilling the board rows
      */
-    public void moveToNextRound() {
+    public void moveToNextRound() throws EmptyDeckException {
         this.currentRound++;
 
         Era previousEra = board.getCurrentEra();
@@ -150,13 +154,14 @@ public class Match {
      * </ul>
      *
      * @param newEra the new {@link Era} the match should transition to
+     * @throws EmptyDeckException if the building deck runs out of cards while refilling the upper row
      */
-    public void moveToNextEra(Era newEra) {
+    public void moveToNextEra(Era newEra) throws EmptyDeckException {
         this.currentEra = newEra;
 
         board.shiftBuildingsDown();
 
-        board.newUpperBuilding(decks, newEra);
+        board.newUpperBuilding(decks, newEra, playersList.size());
     }
 
     /**
