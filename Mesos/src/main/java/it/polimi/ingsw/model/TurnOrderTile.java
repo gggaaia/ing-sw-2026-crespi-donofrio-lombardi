@@ -10,7 +10,7 @@ public class TurnOrderTile {
             { { 3, 0 }, { 1, 0 }, { 0, 0 }, { 0, 0 }, { -1, -2 } } // 5 players
     };
 
-    private TurnOrderSlot[] slotTurnOrder;
+    private TurnOrderSlot[] turnOrderSlots;
 
 
     /**
@@ -35,8 +35,8 @@ public class TurnOrderTile {
      * @return the slot index, or -1 if not found
      */
     private int getPlayersTurnOrderSlotIndex(Player p) {
-        for (int i = 0; i < slotTurnOrder.length; i++) {
-            if (slotTurnOrder[i].isOccupied() && slotTurnOrder[i].getNickname().equals(p.getNickname())) {
+        for (int i = 0; i < turnOrderSlots.length; i++) {
+            if (turnOrderSlots[i].isOccupied() && turnOrderSlots[i].getTotemColor().equals(p.getPlayerColor())) {
                 return i;
             }
         }
@@ -52,9 +52,9 @@ public class TurnOrderTile {
      */
     private void createTurnOrderSlots(int playersNumber) {
         int[][] values = SLOT_VALUES[playersNumber - 2];
-        slotTurnOrder = new TurnOrderSlot[values.length];
+        turnOrderSlots = new TurnOrderSlot[values.length];
         for (int i = 0; i < values.length; i++) {
-            slotTurnOrder[i] = new TurnOrderSlot(values[i][0], values[i][1]);
+            turnOrderSlots[i] = new TurnOrderSlot(values[i][0], values[i][1]);
         }
     }
 
@@ -74,7 +74,7 @@ public class TurnOrderTile {
         if (index == -1) {
             throw new IllegalArgumentException("Player " + p.getNickname() + " has no totem on the turn order tile.");
         }
-        return slotTurnOrder[index].getFood();
+        return turnOrderSlots[index].getFood();
     }
 
     /**
@@ -89,15 +89,15 @@ public class TurnOrderTile {
         if (index == -1) {
             throw new IllegalArgumentException("Player " + p.getNickname() + " has no totem on the turn order tile.");
         }
-        return slotTurnOrder[index].getPP();
+        return turnOrderSlots[index].getPP();
     }
 
 
 
     /**
-     * Places a totem (player's nickname) on the specified slot in the turn order tile.
+     * Places a totem (player's color) on the specified slot in the turn order tile.
      * If the target slot is already occupied, the totem is not placed and the method returns false.
-     * Otherwise, sets the player's nickname in the slot and returns true.
+     * Otherwise, sets the player's totem color in the slot and returns true.
      *
      * @param p the Player whose totem should be placed
      * @param position_index the index of the slot in which to place the totem
@@ -105,13 +105,13 @@ public class TurnOrderTile {
      * @throws IndexOutOfBoundsException if position_index is out of range
      */
     public boolean placeTotem(Player p, int position_index) {
-        if (position_index < 0 || position_index >= slotTurnOrder.length) {
-            throw new IndexOutOfBoundsException("Invalid slot index: " + position_index + ", must be between 0 and " + (slotTurnOrder.length - 1));
+        if (position_index < 0 || position_index >= turnOrderSlots.length) {
+            throw new IndexOutOfBoundsException("Invalid slot index: " + position_index + ", must be between 0 and " + (turnOrderSlots.length - 1));
         }
-        if (slotTurnOrder[position_index].isOccupied()) {
+        if (turnOrderSlots[position_index].isOccupied()) {
             return false;
         }
-        slotTurnOrder[position_index].setNickname(p.getNickname());
+        turnOrderSlots[position_index].setTotemColor(p.getPlayerColor());
         return true;
     }
 
@@ -119,8 +119,8 @@ public class TurnOrderTile {
 
     /**
      * Removes the player's totem from the turn order tile.
-     * Searches through the slotTurnOrder to find a slot occupied by the player with the given nickname.
-     * If found, removes the totem (by removing the nickname from the slot) and returns true.
+     * Searches through the turnOrderSlots to find a slot occupied by the player with the given totem color.
+     * If found, removes the totem (by clearing the totem color from the slot) and returns true.
      * If the player is not found in any slot, returns false.
      *
      * @param p the Player whose totem should be removed
@@ -131,7 +131,7 @@ public class TurnOrderTile {
         if (index == -1) {
             return false;
         }
-        return slotTurnOrder[index].removeTotem();
+        return turnOrderSlots[index].removeTotem();
     }
 
     
