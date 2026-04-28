@@ -5,13 +5,22 @@ import java.util.List;
 public class GameManager {
     private List<Match> matches;
 
-    public void createMatch() {
+    /**
+     * Creates a new match, adds it to the list of matches, and returns its unique
+     * identifier.
+     *
+     * @return the unique ID of the newly created match
+     */
+    public int createMatch() {
+        Match newMatch = new Match();
+        matches.add(newMatch);
+        return newMatch.getMatchID();
     }
 
-    public void saveMatch() {
+    public void saveMatch(int matchID) {
+        // TODO: add databse saving functionality
     }
 
-    
     /**
      * Retrieves a match by its unique identifier.
      *
@@ -32,7 +41,8 @@ public class GameManager {
         return foundedMatch;
     }
 
-    public boolean closeMatch() {
+    public boolean closeMatch(int matchID) {
+        // TODO add database closing functionality + ??
         return false;
     }
 }

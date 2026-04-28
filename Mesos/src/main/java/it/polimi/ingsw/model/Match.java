@@ -50,12 +50,19 @@ public class Match {
     }
 
     public void addPlayer(Match m, Player p) {
+    if (!playersList.contains(p)) {
+        playersList.add(p);
+    }
     }
 
     public void removePlayer(Player p) {
+    if (playersList.contains(p)) {
+        playersList.remove(p);
+    }
     }
 
     public void savePoints() {
+    // TODO: database saving functionality
     }
 
     public void startMatch() {
@@ -71,7 +78,9 @@ public class Match {
     }
 
     public List<Player> createLeaderboard() {
-        return null;
+        List<Player> leaderboard = new ArrayList<>(playersList);
+        leaderboard.sort((player1, player2) -> Integer.compare(player2.getPrestigePoints(), player1.getPrestigePoints()));
+        return leaderboard;
     }
 
     /**
