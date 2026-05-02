@@ -181,6 +181,45 @@ public class Board {
 
 
     /**
+     * Removes the card matching the given card's {@code cardID} from either
+     * the upper row or the lower row.
+     * <p>
+     * Both rows are searched (upper first, then lower) via
+     * {@link CardRow#takeCard(Card)}, which inspects only character and
+     * building cards (events are not searched). The first row containing a
+     * match has the card removed; thanks to short-circuit evaluation, the
+     * lower row is not touched if the match was already in the upper row.
+     *
+     * @param card the card whose {@code cardID} identifies the card to remove
+     * @return {@code true} if a matching card was found and removed from
+     *         either row, {@code false} otherwise
+     * @throws IllegalArgumentException if {@code card} is {@code null}
+     * @throws IllegalStateException    if the same {@code cardID} appears
+     *                                  more than once within a single row
+     */
+    public boolean removeCardFromRows(Card card) {
+        return this.upperRow.takeCard(card) || this.lowerRow.takeCard(card);
+    }
+
+    /**
+     * Returns whether the card matching the given card's {@code cardID} is
+     * present in either the upper row or the lower row.
+     * <p>
+     * Both rows are checked via {@link CardRow#containsCard(Card)}, which
+     * inspects only character and building cards (events are not searched).
+     * Thanks to short-circuit evaluation, the lower row is not scanned if the
+     * card is already found in the upper row.
+     *
+     * @param card the card whose {@code cardID} is searched for
+     * @return {@code true} if a card with the same {@code cardID} is present
+     *         in either row, {@code false} otherwise
+     * @throws IllegalArgumentException if {@code card} is {@code null}
+     */
+    public boolean containsCard(Card card) {
+        return this.upperRow.containsCard(card) || this.lowerRow.containsCard(card);
+    }
+
+    /**
      * Shifts the upper row's tribe cards (characters and events) down into
      * the lower row.
      * <p>

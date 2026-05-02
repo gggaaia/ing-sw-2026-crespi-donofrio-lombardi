@@ -33,18 +33,98 @@ public class CardRow {
     }
 
 
-    public CharacterCard takeCharacterCard(int position) {
-        if (position >= 0 && position < this.characterCards.size()) {
-            return this.characterCards.remove(position);
+    /**
+     * Removes the card matching the given card's {@code cardID} from this
+     * row, searching only in {@link #characterCards} and {@link #buildingCards}
+     * (event cards are not searched).
+     * <p>
+     * Cards are compared via {@link Card#getCardID()}, which is assumed to be
+     * unique across the deck.
+     * <p>
+     * If a single matching card is found, it is removed and the method returns
+     * {@code true}. If no matching card is found, the method returns
+     * {@code false} and the row is left unchanged. If the same {@code cardID}
+     * appears more than once across the two searched lists, the row is left
+     * unchanged and {@link IllegalStateException} is thrown, since this
+     * indicates an inconsistent game state.
+     *
+     * @param card the card whose {@code cardID} identifies the card to remove
+     * @return {@code true} if a matching card was found and removed,
+     *         {@code false} otherwise
+     * @throws IllegalArgumentException if {@code card} is {@code null}
+     * @throws IllegalStateException    if the same {@code cardID} appears
+     *                                  more than once in this row
+     */
+    public boolean takeCard(Card card) {
+        if (card == null) {
+            throw new IllegalArgumentException("card cannot be null");
         }
-        return null;
+        int targetId = card.getCardID();
+
+        int charIndex = -1;
+        int buildIndex = -1;
+        int occurrences = 0;
+
+        for (int i = 0; i < this.characterCards.size(); i++) {
+            if (this.characterCards.get(i).getCardID() == targetId) {
+                charIndex = i;
+                occurrences++;
+            }
+        }
+        for (int i = 0; i < this.buildingCards.size(); i++) {
+            if (this.buildingCards.get(i).getCardID() == targetId) {
+                buildIndex = i;
+                occurrences++;
+            }
+        }
+
+        if (occurrences == 0) {
+            return false;
+        }
+        if (occurrences > 1) {
+            throw new IllegalStateException(
+                    "Duplicate cardID " + targetId + " found in CardRow (occurrences: "
+                            + occurrences + ")");
+        }
+
+        if (charIndex >= 0) {
+            this.characterCards.remove(charIndex);
+        } else {
+            this.buildingCards.remove(buildIndex);
+        }
+        return true;
     }
 
-    public BuildingCard takeBuildingCard(int position) {
-        if (position >= 0 && position < this.buildingCards.size()) {
-            return this.buildingCards.remove(position);
+    /**
+     * Returns whether the card matching the given card's {@code cardID} is
+     * present in this row, searching only in {@link #characterCards} and
+     * {@link #buildingCards} (event cards are not searched).
+     * <p>
+     * Cards are compared via {@link Card#getCardID()}, which is assumed to be
+     * unique across the deck. The row is not modified.
+     *
+     * @param card the card whose {@code cardID} is searched for
+     * @return {@code true} if a card with the same {@code cardID} is found,
+     *         {@code false} otherwise
+     * @throws IllegalArgumentException if {@code card} is {@code null}
+     */
+    public boolean containsCard(Card card) {
+        if (card == null) {
+            throw new IllegalArgumentException("card cannot be null");
         }
-        return null;
+        int targetId = card.getCardID();
+
+        for (CharacterCard c : this.characterCards) {
+            if (c.getCardID() == targetId) {
+                return true;
+            }
+        }
+        for (BuildingCard b : this.buildingCards) {
+            if (b.getCardID() == targetId) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public void discardTribeCards() {
