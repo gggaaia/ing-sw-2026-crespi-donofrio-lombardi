@@ -6,11 +6,17 @@ import it.polimi.ingsw.model.enums.InventorIcon;
 import it.polimi.ingsw.model.enums.TotemColor;
 import it.polimi.ingsw.model.state.NotPlaying;
 import it.polimi.ingsw.model.state.PlayerState;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
 
-public class Player {
+public class Player implements Serializable {
+    /**
+     * Serialization version for the wire/snapshot format.
+     */
+    private static final long serialVersionUID = 1L;
+
     private final String nickname;
     private TotemColor playerColor;
     private int prestigePoints;
@@ -296,6 +302,24 @@ public class Player {
 
     public int getPPBuilderBonus() {
         return ppBuilderBonus;
+    }
+
+    /**
+     * Returns the prestige-point bonus this player gets from owning the
+     * special "upper-row building" at end-of-game scoring time.
+     * <p>
+     * <b>STUB</b>: this is a placeholder so the project compiles. The
+     * intended logic is to walk {@link #playerBuildings} and check each
+     * one's {@link BuildingCard#hasUpperRowBuilding(Player)}; for now we
+     * return {@code 0} so the call in {@code Match#resolveEndMatch()}
+     * adds nothing. Replace the body when you wire up the real bonus
+     * value.
+     *
+     * @return the end-of-game bonus contributed by the upper-row
+     *         building (currently always {@code 0})
+     */
+    public int hasUpperRowBuilding() {
+        return 0;
     }
 
     public int getSixSetCounter() {

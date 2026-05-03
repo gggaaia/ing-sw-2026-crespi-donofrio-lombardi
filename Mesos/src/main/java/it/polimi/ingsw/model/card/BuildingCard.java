@@ -46,5 +46,4 @@ public class BuildingCard extends Card {
     public boolean hasHuntingBonus(Player player) {return false;}
     public int sustenanceBonus(Player player) {return 0;}
     public boolean hasUpperRowBuilding(Player player) {return false;}
-
 }

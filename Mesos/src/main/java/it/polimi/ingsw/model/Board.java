@@ -9,12 +9,18 @@ import it.polimi.ingsw.model.card.TribeCard;
 import it.polimi.ingsw.model.enums.Era;
 import it.polimi.ingsw.model.enums.TotemColor;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
-public class Board {
+public class Board implements Serializable {
+    /**
+     * Serialization version for the wire/snapshot format.
+     */
+    private static final long serialVersionUID = 1L;
+
     /**
      * Lookup table for the number of building cards added to the upper row
      * at the start of each era, indexed by {@code [numPlayers - 2][era.ordinal()]}.
@@ -37,6 +43,21 @@ public class Board {
 
     public CardRow getUpperRow() {return upperRow;}
     public CardRow getLowerRow() {return lowerRow;}
+    public TurnOrderTile getTurnOrderTile() {return turnOrderTile;}
+
+    /**
+     * Returns the offering track currently configured on this board.
+     * <p>
+     * The returned list is the live, internal list (so changes by the model
+     * itself, e.g. {@link #moveTotem(int, Player)}, are visible to readers).
+     * The list is {@code null} until {@link #setupOfferingTiles(int)} has
+     * been called.
+     *
+     * @return the offering track, or {@code null} if not initialized yet
+     */
+    public List<OfferingTile> getOfferingTrack() {
+        return offeringTrack;
+    }
 
     /**
      * Initializes the offering track for the board with all eligible offering tiles
@@ -121,20 +142,28 @@ public class Board {
      * Each drawn card is dispatched to the correct internal list of the
      * upper row via {@link Card#addToRow(CardRow)} (characters and events
      * are stored separately in {@link CardRow}).
+     * <p>
+     * If the tribe deck runs out of cards before the upper row reaches the
+     * target size, the failure is logged to standard error and the refill
+     * loop exits early, leaving the upper row partially filled.
      *
      * @param d          the decks to draw tribe cards from
      * @param numPlayers the number of players in the match
-     * @throws EmptyDeckException if the tribe deck runs out of cards before
-     *                            the upper row reaches the target size
      */
-    public void newUpper(Decks d, int numPlayers) throws EmptyDeckException {
+    public void newUpper(Decks d, int numPlayers) {
         int target = numPlayers + 4;
         int current = this.upperRow.getCharacterCards().size()
                 + this.upperRow.getEventCards().size();
         int cardsToAdd = target - current;
         for (int i = 0; i < cardsToAdd; i++) {
-            Card drawnCard = d.drawTribe();
-            drawnCard.addToRow(this.upperRow);
+            try {
+                Card drawnCard = d.drawTribe();
+                drawnCard.addToRow(this.upperRow);
+            } catch (EmptyDeckException e) {
+                System.err.println("newUpper: tribe deck empty, stopping refill: "
+                        + e.getMessage());
+                break;
+            }
         }
     }
 
@@ -185,38 +214,73 @@ public class Board {
      * the upper row or the lower row.
      * <p>
      * Both rows are searched (upper first, then lower) via
-     * {@link CardRow#takeCard(Card)}, which inspects only character and
-     * building cards (events are not searched). The first row containing a
-     * match has the card removed; thanks to short-circuit evaluation, the
-     * lower row is not touched if the match was already in the upper row.
+     * {@link CardRow#takeCharacterCard(Card)} and
+     * {@link CardRow#takeBuildingCard(Card)}; event cards are not searched.
+     * Within each row, character cards are checked before building cards.
+     * The first lookup that finds a match removes the card and returns it;
+     * subsequent lookups are skipped.
      *
      * @param card the card whose {@code cardID} identifies the card to remove
-     * @return {@code true} if a matching card was found and removed from
-     *         either row, {@code false} otherwise
+     * @return the removed {@link Card} (the instance previously stored in
+     *         the matching row), or {@code null} if no matching card was
+     *         found in either row
      * @throws IllegalArgumentException if {@code card} is {@code null}
      * @throws IllegalStateException    if the same {@code cardID} appears
-     *                                  more than once within a single row
+     *                                  more than once within a single row's
+     *                                  character or building cards
      */
-    public boolean removeCardFromRows(Card card) {
-        return this.upperRow.takeCard(card) || this.lowerRow.takeCard(card);
+    public Card removeCardFromRows(Card card) {
+        Card removed = this.upperRow.takeCharacterCard(card);
+        if (removed != null) {
+            return removed;
+        }
+        removed = this.upperRow.takeBuildingCard(card);
+        if (removed != null) {
+            return removed;
+        }
+        removed = this.lowerRow.takeCharacterCard(card);
+        if (removed != null) {
+            return removed;
+        }
+        return this.lowerRow.takeBuildingCard(card);
     }
 
     /**
-     * Returns whether the card matching the given card's {@code cardID} is
-     * present in either the upper row or the lower row.
+     * Returns whether a character card with the given card's {@code cardID}
+     * is present in either the upper row or the lower row.
      * <p>
-     * Both rows are checked via {@link CardRow#containsCard(Card)}, which
-     * inspects only character and building cards (events are not searched).
-     * Thanks to short-circuit evaluation, the lower row is not scanned if the
-     * card is already found in the upper row.
+     * Each row is checked via {@link CardRow#containsCharacterCard(Card)};
+     * event and building cards are not searched. Thanks to short-circuit
+     * evaluation, the lower row is not scanned if the card is already found
+     * in the upper row.
      *
      * @param card the card whose {@code cardID} is searched for
-     * @return {@code true} if a card with the same {@code cardID} is present
-     *         in either row, {@code false} otherwise
+     * @return {@code true} if a character card with the same {@code cardID}
+     *         is present in either row, {@code false} otherwise
      * @throws IllegalArgumentException if {@code card} is {@code null}
      */
-    public boolean containsCard(Card card) {
-        return this.upperRow.containsCard(card) || this.lowerRow.containsCard(card);
+    public boolean containsCharacterCard(Card card) {
+        return this.upperRow.containsCharacterCard(card)
+                || this.lowerRow.containsCharacterCard(card);
+    }
+
+    /**
+     * Returns whether a building card with the given card's {@code cardID}
+     * is present in either the upper row or the lower row.
+     * <p>
+     * Each row is checked via {@link CardRow#containsBuildingCard(Card)};
+     * event and character cards are not searched. Thanks to short-circuit
+     * evaluation, the lower row is not scanned if the card is already found
+     * in the upper row.
+     *
+     * @param card the card whose {@code cardID} is searched for
+     * @return {@code true} if a building card with the same {@code cardID}
+     *         is present in either row, {@code false} otherwise
+     * @throws IllegalArgumentException if {@code card} is {@code null}
+     */
+    public boolean containsBuildingCard(Card card) {
+        return this.upperRow.containsBuildingCard(card)
+                || this.lowerRow.containsBuildingCard(card);
     }
 
     /**
@@ -284,6 +348,52 @@ public class Board {
     }
 
     /**
+     * Returns the players currently placed on the {@link TurnOrderTile}, in
+     * the order of the slots they occupy (slot 0 first, then slot 1, etc.).
+     * <p>
+     * The turn order slots are scanned from index {@code 0} to the last
+     * index; for every {@link TurnOrderSlot#isOccupied() occupied} slot, the
+     * player whose {@link Player#getPlayerColor() totem color} matches the
+     * slot's {@link TurnOrderSlot#getTotemColor() totem color} is appended
+     * to the result list. Empty slots are skipped, so the returned list
+     * contains no gaps and at most one entry per occupied slot.
+     * <p>
+     * The {@code players} argument is required because slots store totems
+     * as {@link TotemColor}, and this method needs to resolve each color
+     * back to its owning {@link Player}.
+     *
+     * @param players the players currently in the match (used to resolve a
+     *                {@link TotemColor} back to its owning {@link Player})
+     * @return a list of players ordered by their slot position on the turn
+     *         order tile (slot 0 first); empty if no totems are on the tile
+     * @throws IllegalStateException if a totem on the turn order tile has a
+     *                               color that does not match any player in
+     *                               {@code players}
+     */
+    public List<Player> getPlayersTurnOrder(List<Player> players) {
+        List<Player> turnOrder = new ArrayList<>();
+        for (TurnOrderSlot slot : this.turnOrderTile.getTurnOrderSlots()) {
+            if (!slot.isOccupied()) {
+                continue;
+            }
+            TotemColor color = slot.getTotemColor();
+            Player owner = null;
+            for (Player p : players) {
+                if (p.getPlayerColor() == color) {
+                    owner = p;
+                    break;
+                }
+            }
+            if (owner == null) {
+                throw new IllegalStateException(
+                        "No player found for totem color " + color + " on turn order tile.");
+            }
+            turnOrder.add(owner);
+        }
+        return turnOrder;
+    }
+
+    /**
      * Moves the given player's totem from the {@link TurnOrderTile} onto the
      * offering tile at the specified position in the offering track.
      * <p>
@@ -318,6 +428,78 @@ public class Board {
         this.turnOrderTile.clearSlot(p);
         tile.setCurrentTotemColor(p.getPlayerColor());
         return true;
+    }
+
+    /**
+     * Returns the index of the offering tile currently occupied by the given
+     * player's totem.
+     * <p>
+     * The offering track is scanned from left to right; a tile matches when
+     * it is occupied (see {@link OfferingTile#isOccupied()}) and its
+     * {@link OfferingTile#getCurrentTotemColor()} equals
+     * {@link Player#getPlayerColor()}. Because each player owns a unique
+     * {@link TotemColor}, at most one tile can match.
+     *
+     * @param p the player whose totem position on the offering track is requested
+     * @return the index of the matching tile in {@link #offeringTrack}, or
+     *         {@code -1} if the player's totem is not on the track
+     */
+    public int getOfferingTrackIndex(Player p) {
+        TotemColor color = p.getPlayerColor();
+        for (int i = 0; i < offeringTrack.size(); i++) {
+            OfferingTile tile = offeringTrack.get(i);
+            if (tile.isOccupied() && tile.getCurrentTotemColor() == color) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * Returns the players currently placed on the offering track, in the
+     * left-to-right order of the offering tiles they occupy.
+     * <p>
+     * The offering track is scanned from index {@code 0} to the last index;
+     * for every {@link OfferingTile#isOccupied() occupied} tile, the player
+     * whose {@link Player#getPlayerColor() totem color} matches the tile's
+     * {@link OfferingTile#getCurrentTotemColor() current totem color} is
+     * appended to the result list. Empty offering tiles are skipped, so the
+     * returned list contains no gaps and at most one entry per occupied tile.
+     * <p>
+     * The {@code players} argument is required because totems are stored on
+     * offering tiles as {@link TotemColor}, and this method needs to resolve
+     * each color back to its owning {@link Player}.
+     *
+     * @param players the players currently in the match (used to resolve a
+     *                {@link TotemColor} back to its owning {@link Player})
+     * @return a list of players ordered by their position on the offering
+     *         track (first occupied tile first); empty if no totems are on
+     *         the track
+     * @throws IllegalStateException if a totem on the offering track has a
+     *                               color that does not match any player in
+     *                               {@code players}
+     */
+    public List<Player> getOfferingTrackPlayersOrder(List<Player> players) {
+        List<Player> orderedPlayers = new ArrayList<>();
+        for (OfferingTile tile : offeringTrack) {
+            if (!tile.isOccupied()) {
+                continue;
+            }
+            TotemColor color = tile.getCurrentTotemColor();
+            Player owner = null;
+            for (Player p : players) {
+                if (p.getPlayerColor() == color) {
+                    owner = p;
+                    break;
+                }
+            }
+            if (owner == null) {
+                throw new IllegalStateException(
+                        "No player found for totem color " + color + " on offering tile.");
+            }
+            orderedPlayers.add(owner);
+        }
+        return orderedPlayers;
     }
 
     /**

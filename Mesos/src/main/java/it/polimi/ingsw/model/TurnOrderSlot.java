@@ -2,7 +2,14 @@ package it.polimi.ingsw.model;
 
 import it.polimi.ingsw.model.enums.TotemColor;
 
-public class TurnOrderSlot {
+import java.io.Serializable;
+
+public class TurnOrderSlot implements Serializable {
+    /**
+     * Serialization version for the wire/snapshot format.
+     */
+    private static final long serialVersionUID = 1L;
+
     private int food;
     private int PP;
     private TotemColor totemColor;

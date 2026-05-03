@@ -1,6 +1,13 @@
 package it.polimi.ingsw.model;
 
-public class TurnOrderTile {
+import java.io.Serializable;
+
+public class TurnOrderTile implements Serializable {
+    /**
+     * Serialization version for the wire/snapshot format.
+     */
+    private static final long serialVersionUID = 1L;
+
 
     // [playerCount-2][slotIndex] = {food, PP}
     private static final int[][][] SLOT_VALUES = {
@@ -11,6 +18,11 @@ public class TurnOrderTile {
     };
 
     private TurnOrderSlot[] turnOrderSlots;
+
+
+    public TurnOrderSlot[] getTurnOrderSlots() {
+        return turnOrderSlots;
+    }
 
 
     /**
@@ -134,5 +146,4 @@ public class TurnOrderTile {
         return turnOrderSlots[index].removeTotem();
     }
 
-    
 }

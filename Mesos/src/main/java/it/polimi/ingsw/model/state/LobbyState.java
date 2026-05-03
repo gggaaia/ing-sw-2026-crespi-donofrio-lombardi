@@ -13,10 +13,6 @@ public class LobbyState extends MatchState {
     }
 
     @Override
-    public void savePoints(Match m) {
-    }
-
-    @Override
     public void startMatch(Match m) {
     }
 

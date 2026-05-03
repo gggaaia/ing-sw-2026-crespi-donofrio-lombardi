@@ -4,9 +4,17 @@ import it.polimi.ingsw.model.CardRow;
 import it.polimi.ingsw.model.Player;
 import it.polimi.ingsw.model.enums.Era;
 
+import java.io.Serializable;
 import java.util.List;
 
-public abstract class Card {
+public abstract class Card implements Serializable {
+    /**
+     * Serialization version. Inherited by every subclass; subclasses don't
+     * need to redeclare it unless they actually change their own field
+     * layout in a backwards-incompatible way.
+     */
+    private static final long serialVersionUID = 1L;
+
     private int cardID;
     private Era era;
     private int minPlayers;

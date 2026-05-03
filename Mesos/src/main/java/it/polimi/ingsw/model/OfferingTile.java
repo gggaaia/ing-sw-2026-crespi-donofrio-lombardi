@@ -2,12 +2,18 @@ package it.polimi.ingsw.model;
 
 import it.polimi.ingsw.model.enums.TileLetter;
 import it.polimi.ingsw.model.enums.TotemColor;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
 
-public class OfferingTile {
+public class OfferingTile implements Serializable {
+    /**
+     * Serialization version for the wire/snapshot format.
+     */
+    private static final long serialVersionUID = 1L;
+
     private final TileLetter letter;
     private final int topCardsToGet;
     private final int bottomCardsToGet;

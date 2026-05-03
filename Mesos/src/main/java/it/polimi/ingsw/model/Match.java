@@ -5,6 +5,7 @@ import it.polimi.ingsw.exceptions.EmptyDeckException;
 import it.polimi.ingsw.model.card.BuildingCard;
 import it.polimi.ingsw.model.card.EventCard;
 import it.polimi.ingsw.model.enums.Era;
+import it.polimi.ingsw.model.enums.TotemColor;
 import it.polimi.ingsw.model.state.LobbyState;
 import it.polimi.ingsw.model.state.MatchState;
 
@@ -13,13 +14,21 @@ import java.util.Date;
 import java.util.List;
 
 public class Match {
+    /**
+     * The round on which the game ends. After {@code resolveBuildings} and
+     * {@code resolveEvents} have been applied for round {@code FINAL_ROUND},
+     * the controller runs the end-of-game sequence ({@code shiftUpToLow},
+     * a final {@code resolveEvents}, {@code resolveEndMatch}, leaderboard
+     * creation) instead of advancing to the next round.
+     */
+    public static final int FINAL_ROUND = 11;
+
     private final int matchID;
     private MatchState status = new LobbyState();
     private final Date date = new Date();
     private final List<Player> playersList = new ArrayList<>();
     private int currentRound = 0;
     private Era currentEra = Era.ERA_1;
-    private int currentPlayersNumber = 0;
     private Board board;
     private Decks decks;
 
@@ -56,7 +65,58 @@ public class Match {
         return matchID;
     }
 
-    public void addPlayer(Match m, Player p) {
+    /**
+     * Returns the {@link Board} owned by this match.
+     *
+     * @return the match's board (never {@code null} for a fully constructed Match)
+     */
+    public Board getBoard() {
+        return board;
+    }
+
+    /**
+     * Returns the players currently registered in this match.
+     * <p>
+     * The returned list is the live, internal list (not a defensive copy),
+     * so callers must not modify it directly.
+     *
+     * @return the players registered in this match
+     */
+    public List<Player> getPlayersList() {
+        return playersList;
+    }
+
+    /**
+     * Returns the current round number. The first round of a started match is
+     * {@code 1}; the value is {@code 0} for a match that has not yet been
+     * started via {@link #startMatch()}.
+     *
+     * @return the current round number
+     */
+    public int getCurrentRound() {
+        return currentRound;
+    }
+
+    /**
+     * Returns the current {@link Era} of this match. Updated by
+     * {@link #moveToNextEra(Era)} when the era changes.
+     *
+     * @return the current era
+     */
+    public Era getCurrentEra() {
+        return currentEra;
+    }
+
+    /**
+     * Adds a player to this match if they are not already registered.
+     * <p>
+     * Players are compared by reference equality (i.e. the same {@link Player}
+     * instance is never added twice). The caller is expected to ensure
+     * nicknames and totem colors are unique.
+     *
+     * @param p the player to add (ignored if already in the list)
+     */
+    public void addPlayer(Player p) {
         if (!playersList.contains(p)) {
             playersList.add(p);
         }
@@ -66,10 +126,6 @@ public class Match {
         if (playersList.contains(p)) {
             playersList.remove(p);
         }
-    }
-
-    public void savePoints() {
-        // TODO: database saving functionality
     }
 
     /**
@@ -82,8 +138,9 @@ public class Match {
      *   <li>Sets up the offering tiles on the board,</li>
      *   <li>Sets up the turn order tiles on the board,</li>
      *   <li>Sets up the lower card row on the board,</li>
-     *   <li>Sets up the upper card row on the board, and</li>
-     *   <li>Sets up the upper building row on the board.</li>
+     *   <li>Sets up the upper card row on the board,</li>
+     *   <li>Sets up the upper building row on the board, and</li>
+     *   <li>Places the players' initial totems on the turn order tile.</li>
      * </ul>
      *
      * @throws DeckLoadException  if the player count is invalid or the cards file cannot be loaded
@@ -96,6 +153,12 @@ public class Match {
 
         decks.populateDecks(numPlayers);
 
+        // Shuffle right after population so the order in which cards are
+        // drawn is not the deterministic JSON order. The shuffle preserves
+        // the era-based draw order (and the final-events constraint) — see
+        // Decks.shuffleDecks for details.
+        decks.shuffleDecks();
+
         board.setupOfferingTiles(numPlayers);
 
         board.setupTurnOrderTiles(numPlayers);
@@ -105,11 +168,19 @@ public class Match {
         board.newUpper(decks, numPlayers);
 
         board.newUpperBuilding(decks, Era.ERA_1, numPlayers);
+
+        board.placeInitTotems(playersList);
     }
 
+    /**
+     * End-of-match cleanup hook. Currently this only triggers
+     * {@link #resolveEndMatch()} (i.e. the final scoring pass). Any further
+     * cleanup that is internal to the {@link Match} aggregate belongs here;
+     * snapshot persistence on disk is handled outside the model, by the
+     * controller layer's {@code PersistenceManager}.
+     */
     public void endMatch() {
         resolveEndMatch();
-        // TODO: saving to database functionality
     }
 
     /**
@@ -165,15 +236,61 @@ public class Match {
     }
 
     /**
-     * Creates and returns a leaderboard of players in the match, sorted in descending order
-     * by their prestige points (i.e., players with more prestige points come first).
+     * Creates and returns a leaderboard of players in the match, sorted from
+     * the best result to the worst.
+     * <p>
+     * Sorting rules (in order):
+     * <ol>
+     *   <li>Higher prestige points come first.</li>
+     *   <li>If two players have the same prestige points, the one with more
+     *       food comes first.</li>
+     *   <li>If they are still tied, both are considered to share the victory
+     *       (the relative order between them in the returned list is
+     *       arbitrary).</li>
+     * </ol>
+     * Detecting the "shared victory" case is left to the caller: it is
+     * enough to inspect the prefix of the returned list and check how many
+     * leading players are tied on both prestige points and food.
      *
      * @return a {@code List<Player>} representing the sorted leaderboard
      */
     public List<Player> createLeaderboard() {
+        // Start from a copy of the players list so we don't mutate the
+        // match's own ordering.
         List<Player> leaderboard = new ArrayList<>(playersList);
-        leaderboard.sort((player1, player2) -> Integer.compare(player2.getPrestigePoints(), player1.getPrestigePoints()));
+
+        // Sort by hand (insertion sort) so the comparison rule is right
+        // there in the loop body. For each i, scan back and shift any
+        // earlier player that should come AFTER leaderboard[i] one step
+        // to the right.
+        for (int i = 1; i < leaderboard.size(); i++) {
+            Player current = leaderboard.get(i);
+            int j = i - 1;
+            while (j >= 0 && shouldComeAfter(leaderboard.get(j), current)) {
+                leaderboard.set(j + 1, leaderboard.get(j));
+                j--;
+            }
+            leaderboard.set(j + 1, current);
+        }
         return leaderboard;
+    }
+
+    /**
+     * Returns {@code true} when {@code earlier} should appear AFTER
+     * {@code later} in the leaderboard, i.e. {@code later} has a strictly
+     * better score. The score is compared on prestige points first and
+     * food as a tie-breaker (matching the contract documented on
+     * {@link #createLeaderboard()}).
+     */
+    private boolean shouldComeAfter(Player earlier, Player later) {
+        if (later.getPrestigePoints() > earlier.getPrestigePoints()) {
+            return true;
+        }
+        if (later.getPrestigePoints() < earlier.getPrestigePoints()) {
+            return false;
+        }
+        // Tie on prestige points: more food wins.
+        return later.getFood() > earlier.getFood();
     }
 
     /**
@@ -215,7 +332,7 @@ public class Match {
                 card.applyEndEffect(player);
                 player.changePP(card.getEndOfGamePP());
             }
-            player.changePP(player.getPPBuilderBonus());
+            player.changePP(player.hasUpperRowBuilding());
         }
     }
 
@@ -236,6 +353,69 @@ public class Match {
         }
     }
 
+    /**
+     * Resolves the bonuses (and penalties) granted by the {@link TurnOrderTile}
+     * to every player whose totem currently sits on it.
+     * <p>
+     * Each {@link TurnOrderSlot} on the tile is inspected in order. For every
+     * occupied slot the corresponding {@link Player} is resolved by matching
+     * {@link TurnOrderSlot#getTotemColor()} against
+     * {@link Player#getPlayerColor()} in {@link #playersList}, and the slot's
+     * food and prestige point values (see {@link TurnOrderSlot#getFood()} and
+     * {@link TurnOrderSlot#getPP()}) are applied to that player via
+     * {@link Player#changeFood(int)} and {@link Player#changePP(int)}.
+     * <p>
+     * In addition, when the slot grants strictly positive food
+     * (i.e. {@code getFood() > 0}), every {@link BuildingCard} owned by the
+     * player that returns {@code true} from
+     * {@link BuildingCard#hasUpperRowBuilding(Player)} contributes one
+     * extra food. The sum of these contributions is added on top of the
+     * slot's food via {@link Player#changeFood(int)}.
+     *
+     * @throws IllegalStateException if a slot is occupied by a totem color
+     *                               that does not match any player in this match
+     */
+    public void resolveTurnOrderTile() {
+        TurnOrderSlot[] slots = board.getTurnOrderTile().getTurnOrderSlots();
+        for (TurnOrderSlot slot : slots) {
+            if (!slot.isOccupied()) {
+                continue;
+            }
+
+            TotemColor color = slot.getTotemColor();
+            Player owner = null;
+            for (Player p : playersList) {
+                if (p.getPlayerColor() == color) {
+                    owner = p;
+                    break;
+                }
+            }
+            if (owner == null) {
+                throw new IllegalStateException(
+                        "No player found for totem color " + color + " on turn order tile.");
+            }
+
+            int slotFood = slot.getFood();
+            int slotPP = slot.getPP();
+
+            owner.changePP(slotPP);
+            owner.changeFood(slotFood);
+
+            // When the slot grants positive food, the owner gets one
+            // extra food per owned building that grants the upper-row
+            // building bonus (see BuildingCard.hasUpperRowBuilding).
+            if (slotFood > 0) {
+                int buildingBonus = 0;
+                for (BuildingCard card : owner.getPlayerBuildings()) {
+                    if (card.hasUpperRowBuilding(owner)) {
+                        buildingBonus += 1;
+                    }
+                }
+                owner.changeFood(buildingBonus);
+            }
+        }
+    }
+
     public void startRound() {
 
         // TODO: implement the logic of the startRound() method
@@ -251,6 +431,5 @@ public class Match {
         // resolveBuildings():
     }
 
-    public void createBoard() {
-    }
+
 }
