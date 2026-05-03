@@ -22,7 +22,6 @@ public class Builder extends CharacterCard {
     public void setBuildingCostRedux(int buildingCostRedux) {this.buildingCostRedux = buildingCostRedux; }
     public void setPrestigePoint(int prestigePoint) { this.prestigePoint = prestigePoint; }
 
-    //FIXME: sistema la classe quando arriva la modifica al player
     public void drawEffect(Player player) {
         player.increaseBuilderCounter(1);
         player.increasePPBuilderBonus(prestigePoint);

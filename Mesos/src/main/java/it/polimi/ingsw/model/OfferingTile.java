@@ -64,5 +64,4 @@ public class OfferingTile implements Serializable {
                 new OfferingTile(TileLetter.G, 2, 1, 3, 0)
         ));
     }
-
 }

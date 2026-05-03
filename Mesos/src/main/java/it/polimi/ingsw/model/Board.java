@@ -13,6 +13,7 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 public class Board implements Serializable {
@@ -574,6 +575,11 @@ public class Board implements Serializable {
         return highest;
     }
 
-
+    public List<TotemColor> getTotemColorTurnOrder() {
+        return this.offeringTrack.stream()
+                .map(OfferingTile::getCurrentTotemColor)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+    }
 
 }

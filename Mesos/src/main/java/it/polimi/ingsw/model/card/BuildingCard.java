@@ -37,7 +37,8 @@ public class BuildingCard extends Card {
         row.addBuildingCard(this);
     }
 
-    public void applyEffect(Player player) { }
+    public int applyStarBonus(Player player) { return 0;}
+    public void turnOrderBonus(Player player) { }
     public void applyEndEffect(Player player) { }
     public void applyEndRoundEffect(Player player) { }
     public int checkRitualSafe(Player player) {return 1;}

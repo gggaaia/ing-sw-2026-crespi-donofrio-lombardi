@@ -10,7 +10,7 @@ public class TotemFoodBonus extends BuildingCard {
     }
 
     @Override
-    public void applyEffect(Player player) {
+    public void turnOrderBonus(Player player) {
         if(player==getOwner()){
             player.changeFood(1);
         }

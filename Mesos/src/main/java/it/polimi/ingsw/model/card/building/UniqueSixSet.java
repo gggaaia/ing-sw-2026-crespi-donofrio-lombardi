@@ -11,7 +11,6 @@ public class UniqueSixSet extends EndOfMatchBuilding{
     }
 
     @Override
-    //TODO: implementare l'effetto
     public void applyEndEffect(Player player) {
         if(player==getOwner()){
             int min = IntStream.of(
@@ -22,7 +21,7 @@ public class UniqueSixSet extends EndOfMatchBuilding{
                     player.getShamanCounter(),
                     player.getInventorCounter()
             ).min().orElse(0);
-            player.changePP(min);
+            player.changePP(min*6);
         }
     }
 }

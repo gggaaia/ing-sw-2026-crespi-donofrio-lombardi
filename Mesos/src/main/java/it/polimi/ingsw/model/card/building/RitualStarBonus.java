@@ -7,7 +7,7 @@ public class RitualStarBonus extends EventActivatedBuilding{
     public RitualStarBonus(int cardID, Era era, int minPlayers, int foodCost, int endOfGamePP, Player owner) {
         super(cardID, era, minPlayers, foodCost, endOfGamePP,  owner);
     }
-    public void applyEffect(Player player) {
-        player.increaseStars(3);
+    public int applyStarBonus(Player player) {
+        return (player==getOwner()? 3 : 0);
     }
 }
