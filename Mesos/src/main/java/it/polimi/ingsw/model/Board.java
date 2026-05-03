@@ -12,6 +12,7 @@ import it.polimi.ingsw.model.enums.TotemColor;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 public class Board {
@@ -392,6 +393,11 @@ public class Board {
         return highest;
     }
 
-
+    public List<TotemColor> getTotemColorTurnOrder() {
+        return this.offeringTrack.stream()
+                .map(OfferingTile::getCurrentTotemColor)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+    }
 
 }

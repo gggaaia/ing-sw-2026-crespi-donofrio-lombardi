@@ -5,6 +5,7 @@ import it.polimi.ingsw.exceptions.EmptyDeckException;
 import it.polimi.ingsw.model.card.BuildingCard;
 import it.polimi.ingsw.model.card.EventCard;
 import it.polimi.ingsw.model.enums.Era;
+import it.polimi.ingsw.model.enums.TotemColor;
 import it.polimi.ingsw.model.state.LobbyState;
 import it.polimi.ingsw.model.state.MatchState;
 
@@ -197,6 +198,8 @@ public class Match {
     }
 
     public void resolveAllOfferingTilesEffect() {
+        List<TotemColor> PlayerTurnOrder = board.getTotemColorTurnOrder();
+
         //get the player order and status
         //ask the tile how much food to give the player and does it, ask how many top cards, how many bottom cards to get
         //receive the index of the card the player want, add the card to the player hand, repeat for the number of card needed

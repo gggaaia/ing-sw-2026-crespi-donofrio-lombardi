@@ -282,8 +282,14 @@ public class Player {
         return shamanCounter;
     }
 
+    //Return the number of stars increased by drawing shamans and a Bonus if the RitualStarBonus building is in the player hands
     public int getStarCounter() {
-        return starCounter;
+        int bonus=0;
+        for (BuildingCard card : playerBuildings) {
+            bonus += card.applyStarBonus(this);
+        }
+        return (starCounter+bonus);
+
     }
 
     public int getBuildingDiscountBuilder() {

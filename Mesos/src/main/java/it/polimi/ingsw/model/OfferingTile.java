@@ -58,5 +58,4 @@ public class OfferingTile {
                 new OfferingTile(TileLetter.G, 2, 1, 3, 0)
         ));
     }
-
 }
