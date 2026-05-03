@@ -369,10 +369,11 @@ public class Match {
      * <p>
      * In addition, when the slot grants strictly positive food
      * (i.e. {@code getFood() > 0}), every {@link BuildingCard} owned by the
-     * player that returns {@code true} from
-     * {@link BuildingCard#hasUpperRowBuilding(Player)} contributes one
-     * extra food. The sum of these contributions is added on top of the
-     * slot's food via {@link Player#changeFood(int)}.
+     * player gets a chance to react via
+     * {@link BuildingCard#turnOrderBonus(Player)}. The default
+     * implementation of that method is a no-op, but cards such as
+     * {@code TotemFoodBonus} override it to grant their owner an extra
+     * food (or any other resource change they want to apply).
      *
      * @throws IllegalStateException if a slot is occupied by a totem color
      *                               that does not match any player in this match
@@ -403,17 +404,16 @@ public class Match {
             owner.changePP(slotPP);
             owner.changeFood(slotFood);
 
-            // When the slot grants positive food, the owner gets one
-            // extra food per owned building that grants the upper-row
-            // building bonus (see BuildingCard.hasUpperRowBuilding).
+            // When the slot grants positive food, give every owned
+            // building a chance to add its turn-order bonus. The base
+            // BuildingCard.turnOrderBonus is a no-op; cards such as
+            // TotemFoodBonus override it to call changeFood(1) on the
+            // owner. This way Match doesn't need to know which card
+            // grants what: the polymorphic dispatch handles it.
             if (slotFood > 0) {
-                int buildingBonus = 0;
                 for (BuildingCard card : owner.getPlayerBuildings()) {
-                    if (card.hasUpperRowBuilding(owner)) {
-                        buildingBonus += 1;
-                    }
+                    card.turnOrderBonus(owner);
                 }
-                owner.changeFood(buildingBonus);
             }
         }
     }

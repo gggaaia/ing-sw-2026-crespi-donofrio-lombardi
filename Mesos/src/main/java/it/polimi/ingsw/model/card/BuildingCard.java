@@ -38,7 +38,6 @@ public class BuildingCard extends Card {
     }
 
     public int applyStarBonus(Player player) { return 0;}
-    public void turnOrderBonus(Player player) { }
     public void applyEndEffect(Player player) { }
     public void applyEndRoundEffect(Player player) { }
     public int checkRitualSafe(Player player) {return 1;}
@@ -47,4 +46,20 @@ public class BuildingCard extends Card {
     public boolean hasHuntingBonus(Player player) {return false;}
     public int sustenanceBonus(Player player) {return 0;}
     public boolean hasUpperRowBuilding(Player player) {return false;}
+
+    /**
+     * Hook called by {@link it.polimi.ingsw.model.Match#resolveTurnOrderTile()}
+     * for every building the player owns, but only when the player's
+     * turn-order slot grants strictly positive food.
+     * <p>
+     * The default implementation does nothing. Subclasses that grant a
+     * turn-order food bonus (e.g. {@code TotemFoodBonus}) override this
+     * method to mutate the player's resources directly (typically by
+     * calling {@link Player#changeFood(int)}).
+     *
+     * @param player the player whose turn-order slot just resolved with
+     *               positive food (always equal to the building's owner
+     *               in normal play)
+     */
+    public void turnOrderBonus(Player player) {}
 }
