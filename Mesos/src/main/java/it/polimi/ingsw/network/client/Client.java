@@ -211,15 +211,22 @@ public class Client {
      * for this same phase (and haven't received a result yet).
      */
     private void decideNextAction(GameStateDto state) {
-        // First: nickname is needed across the three lobby sub-phases.
+        // Whenever we don't yet have a nickname, ask for one. We do NOT
+        // gate this on the phase: the server is the only authority on
+        // whether a given nickname is acceptable right now, and there are
+        // legitimate reasons to send one in any phase:
+        //   - lobby phases  → register a new joiner
+        //   - COLOR_PICKING → still part of the lobby flow on the server
+        //   - mid-match     → reconnect by nickname (3+ player games stay
+        //                     in their active phase even while one player
+        //                     is gone, so we must still prompt)
+        //   - PAUSED        → reconnect by nickname (1- or 0-player paused)
+        //   - GAME_ENDED    → server will reject; the rejection re-prompts,
+        //                     but eventually the user will type Ctrl-C.
+        // If the server rejects, onActionResult re-prompts automatically.
         if (myNickname == null && !waitingNicknameResponse) {
-            GamePhase p = state.getPhase();
-            if (p == GamePhase.WAITING_FOR_NICKNAME
-                    || p == GamePhase.WAITING_FOR_PLAYER_COUNT
-                    || p == GamePhase.WAITING_FOR_PLAYERS) {
-                askNickname();
-                return;
-            }
+            askNickname();
+            return;
         }
 
         // Per-phase prompt only when it's our turn (or the phase has no
@@ -268,10 +275,20 @@ public class Client {
         }
     }
 
-    /** {@code true} iff the server's currentPlayerNickname matches ours. */
+    /**
+     * {@code true} iff the server's {@code currentPlayerNickname} refers
+     * to us. The comparison is case-insensitive on purpose: the server's
+     * nickname lookup uses {@code equalsIgnoreCase} (so "Carlo" and
+     * "carlo" are treated as the same player on reconnect), but the
+     * broadcast always carries the canonical (original) form. If the
+     * user reconnected with a different case, our local {@code myNickname}
+     * field would not equal the broadcast string, and we'd never realize
+     * it's our turn.
+     */
     private boolean isMyTurn(GameStateDto state) {
         return myNickname != null
-                && myNickname.equals(state.getCurrentPlayerNickname());
+                && state.getCurrentPlayerNickname() != null
+                && myNickname.equalsIgnoreCase(state.getCurrentPlayerNickname());
     }
 
     // ===================================================================

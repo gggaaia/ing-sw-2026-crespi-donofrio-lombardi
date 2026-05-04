@@ -45,6 +45,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
+import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -52,7 +53,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public class Decks {
+public class Decks implements Serializable {
+    /**
+     * Serialization version. Bump only on backwards-incompatible changes
+     * to the field layout (Decks is reachable from {@code Match}, which
+     * is in turn serialized by the Pass 2 persistence layer).
+     */
+    private static final long serialVersionUID = 1L;
+
     private List<TribeCard> tribeDeck;
     private List<BuildingCard> buildingDeck;
 

@@ -256,6 +256,19 @@ public class GameController {
         }
 
         String nickname = client.getNickname();
+
+        // The game is already over: just mark the slot disconnected and
+        // log it. We must NOT enter the in-match disconnect path because
+        // it would (a) pause a finished match, (b) potentially start the
+        // lone-player timer that, on expiry, would clobber the real
+        // winners with a spurious "lone-player victory". The persisted
+        // snapshot has already been deleted at end-of-game.
+        if (phase == GamePhase.GAME_ENDED) {
+            client.markDisconnected();
+            broadcastInfo(nickname + " disconnected (game already ended).");
+            return;
+        }
+
         boolean wasInMatch = phaseIsInMatch();
 
         if (!wasInMatch) {
@@ -279,7 +292,15 @@ public class GameController {
             // are expected to look at phase==PAUSED first and treat
             // currentPlayerNickname as a hint only.
             cancelLonePlayerTimeoutIfActive();
-            phaseBeforePause = phase;
+            // Only capture the pre-pause phase when we are entering pause
+            // from an active phase. If we are already paused (e.g. the
+            // 2-player case where the first disconnect already paused us
+            // and we're now seeing the second one), we must NOT overwrite
+            // phaseBeforePause with PAUSED, otherwise resumeFromPause
+            // would land back in PAUSED.
+            if (phase != GamePhase.PAUSED_WAITING_RECONNECT) {
+                phaseBeforePause = phase;
+            }
             phase = GamePhase.PAUSED_WAITING_RECONNECT;
             broadcastGameState("All players disconnected. Waiting for reconnect.");
             persistAfterTransition();
@@ -288,7 +309,13 @@ public class GameController {
 
         if (connected == 1) {
             // Lone-player condition: pause + start the 2-minute timer.
-            phaseBeforePause = phase;
+            // Same guard as above: don't clobber phaseBeforePause if we
+            // are already paused (defensive — in normal flow this branch
+            // only fires when transitioning from 2+ connected, which
+            // implies we were not yet paused).
+            if (phase != GamePhase.PAUSED_WAITING_RECONNECT) {
+                phaseBeforePause = phase;
+            }
             phase = GamePhase.PAUSED_WAITING_RECONNECT;
             startLonePlayerTimeout();
             broadcastGameState("Only one player left. Waiting for reconnect ("
@@ -315,11 +342,36 @@ public class GameController {
             availableColors.add(color);
         }
 
-        if (nickname.equals(firstPlayerNickname)) {
-            if (clients.isEmpty()) {
-                resetToLobby();
-                return;
+        // Empty lobby: reset everything.
+        if (clients.isEmpty()) {
+            resetToLobby();
+            return;
+        }
+
+        // Case-insensitive on purpose: nicknames are case-insensitive
+        // identifiers everywhere else in the controller (see e.g.
+        // findClientByNickname, findPlayerByNickname).
+        boolean firstPlayerLeft = nickname.equalsIgnoreCase(firstPlayerNickname);
+
+        if (phase == GamePhase.COLOR_PICKING) {
+            // The "current player" during COLOR_PICKING is whoever is at
+            // the head of the queue. If the leaver was at the head, the
+            // new head is now the picker — without this, the new head's
+            // client would still see the old name in currentPlayerNickname
+            // and would never realize it's their turn, stalling the lobby.
+            if (!colorPickQueue.isEmpty()) {
+                currentPlayerNickname = colorPickQueue.peek().getNickname();
             }
+            // Promote a new first-player just so legacy code that tracks
+            // firstPlayerNickname has a sensible value; we do NOT rewind
+            // the phase because color picking is already in progress.
+            if (firstPlayerLeft) {
+                firstPlayerNickname = clients.get(0).getNickname();
+            }
+        } else if (firstPlayerLeft) {
+            // We're in WAITING_FOR_NICKNAME / WAITING_FOR_PLAYER_COUNT /
+            // WAITING_FOR_PLAYERS. Promote a new first-player and rewind
+            // to the player-count phase so they can pick the lobby size.
             ClientCallback newFirst = clients.get(0);
             firstPlayerNickname = newFirst.getNickname();
             currentPlayerNickname = firstPlayerNickname;
@@ -401,8 +453,9 @@ public class GameController {
             sendActionResult(client, ACTION_NICKNAME, true,
                     "Reconnected as " + trimmed);
             broadcastInfo(trimmed + " reconnected");
-            sendGameStateTo(client, "Welcome back");
-            broadcastGameState("A player reconnected");
+            // Single broadcast: the reconnecting client receives this
+            // too, so we don't need a separate unicast "Welcome back".
+            broadcastGameState(trimmed + " reconnected");
             handleReconnectMaybeResume();
             return;
         }
@@ -419,8 +472,9 @@ public class GameController {
                 sendActionResult(client, ACTION_NICKNAME, true,
                         "Reconnected (restored) as " + trimmed);
                 broadcastInfo(trimmed + " reconnected");
-                sendGameStateTo(client, "Welcome back");
-                broadcastGameState("A player reconnected");
+                // Single broadcast: the reconnecting client receives
+                // this too, so no separate unicast is needed.
+                broadcastGameState(trimmed + " reconnected");
                 handleReconnectMaybeResume();
                 return;
             }
@@ -485,7 +539,7 @@ public class GameController {
             return;
         }
         if (client.getNickname() == null
-                || !client.getNickname().equals(firstPlayerNickname)) {
+                || !client.getNickname().equalsIgnoreCase(firstPlayerNickname)) {
             sendActionResult(client, ACTION_PLAYER_COUNT, false,
                     "Only the first player can choose player count");
             return;
@@ -1121,11 +1175,17 @@ public class GameController {
         // 0, 1, 2, ... to the totems it finds.
         board.moveOfferingTrackToTurnOrder(match.getPlayersList());
 
-        // E1 step 3: append the disconnected players at the end of the
-        // turn-order tile, in playersList order. We pick the next free
-        // slot index for each disconnected player so they end up at the
-        // tail (where the PP malus lives).
-        appendDisconnectedPlayersToTurnOrderTile();
+        // E1 step 3: append every player who did NOT pick an offering
+        // tile this round. Such players are exactly those whose totem is
+        // not currently on the turn-order tile after step 2 (because
+        // their totem was either still on the turn-order tile and got
+        // wiped by clearTurnOrderTile in step 1, or simply never placed
+        // anywhere). They end up at the tail of the turn-order tile,
+        // where the PP malus lives. Note: this includes players who
+        // disconnected mid-pick AND those who happened to reconnect
+        // before this point — connection status doesn't matter, only
+        // whether they participated in the offering pick this round.
+        appendMissingPlayersToTurnOrderTile();
 
         // Apply slot food/PP to every totem currently on the tile (this
         // is where the disconnected players take the last-slot malus).
@@ -1158,22 +1218,29 @@ public class GameController {
 
     /**
      * Walks {@link Match#getPlayersList()} and, for each player whose
-     * callback is currently disconnected, places their totem on the next
-     * free slot of the turn-order tile. Used by
-     * {@link #afterAllResolutionsDone()} to implement E1's "append
-     * disconnected" rule.
+     * totem is NOT currently on the turn-order tile, places it on the
+     * next free slot.
+     * <p>
+     * Used by {@link #afterAllResolutionsDone()} to implement E1's
+     * "append players who didn't pick an offering tile this round"
+     * rule. The check is on totem position rather than connection state
+     * so that a player who disconnected mid-pick and reconnected before
+     * end-of-round is still placed on the tile (otherwise their totem
+     * would silently vanish, and they would be excluded from the next
+     * round's pick order forever).
      */
-    private void appendDisconnectedPlayersToTurnOrderTile() {
+    private void appendMissingPlayersToTurnOrderTile() {
         // Walk slots 0..N-1; the first unoccupied one is the "next free".
         // We re-scan after each placement to find the new next free slot.
         List<Player> players = match.getPlayersList();
         for (int i = 0; i < players.size(); i++) {
             Player p = players.get(i);
-            ClientCallback cb = findCallbackByPlayer(p);
-            if (cb != null && cb.isConnected()) {
+            // Skip if this player already has a totem on the turn-order
+            // tile (i.e. they picked an offering tile this round and
+            // moveOfferingTrackToTurnOrder put them back).
+            if (isPlayerOnTurnOrderTile(p)) {
                 continue;
             }
-            // Disconnected: find the next free slot and place there.
             int freeSlot = findNextFreeTurnOrderSlot();
             if (freeSlot < 0) {
                 // No free slot left (shouldn't happen, but defensive).
@@ -1181,6 +1248,22 @@ public class GameController {
             }
             match.getBoard().getTurnOrderTile().placeTotem(p, freeSlot);
         }
+    }
+
+    /**
+     * @return {@code true} if the given player's totem occupies any slot
+     *         of the turn-order tile, {@code false} otherwise
+     */
+    private boolean isPlayerOnTurnOrderTile(Player p) {
+        it.polimi.ingsw.model.TurnOrderSlot[] slots =
+                match.getBoard().getTurnOrderTile().getTurnOrderSlots();
+        for (int i = 0; i < slots.length; i++) {
+            if (slots[i].isOccupied()
+                    && slots[i].getTotemColor() == p.getPlayerColor()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -1747,8 +1830,22 @@ public class GameController {
         // the registry empty for the restored match; closeMatch will
         // simply return false at the end, which is harmless.)
 
+        // Always come back online in the paused state, so we can wait
+        // for previously-known players to reconnect by nickname before
+        // resuming. The "phase to resume to" depends on what was happening
+        // at snapshot time:
+        //   - If the snapshot was already paused (e.g. server crashed
+        //     after a player disconnect), the original pre-pause phase
+        //     lives in snapshot.phaseBeforePause and we keep it.
+        //   - If the snapshot was an active phase (no pause was active
+        //     when the snapshot was taken), we pause it now and remember
+        //     that active phase so resumeFromPause goes back to it.
         this.phase = GamePhase.PAUSED_WAITING_RECONNECT;
-        this.phaseBeforePause = snapshot.phase;
+        if (snapshot.phase == GamePhase.PAUSED_WAITING_RECONNECT) {
+            this.phaseBeforePause = snapshot.phaseBeforePause;
+        } else {
+            this.phaseBeforePause = snapshot.phase;
+        }
         this.currentPlayerNickname = snapshot.currentPlayerNickname;
         this.turnOrderForOfferingPick =
                 new ArrayList<Player>(snapshot.turnOrderForOfferingPick);

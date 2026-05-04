@@ -9,11 +9,20 @@ import it.polimi.ingsw.model.enums.TotemColor;
 import it.polimi.ingsw.model.state.LobbyState;
 import it.polimi.ingsw.model.state.MatchState;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
-public class Match {
+public class Match implements Serializable {
+    /**
+     * Serialization version. Bump only on backwards-incompatible changes
+     * to the field layout (the Pass 2 persistence layer reads/writes
+     * Match instances inside {@code GameSnapshot} via Java object
+     * serialization).
+     */
+    private static final long serialVersionUID = 1L;
+
     /**
      * The round on which the game ends. After {@code resolveBuildings} and
      * {@code resolveEvents} have been applied for round {@code FINAL_ROUND},
