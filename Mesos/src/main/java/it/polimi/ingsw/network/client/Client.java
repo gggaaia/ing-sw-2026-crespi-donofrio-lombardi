@@ -24,6 +24,7 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -78,6 +79,126 @@ public class Client {
     private boolean waitingCharactersResponse;
     private boolean waitingBuildingsResponse;
     private boolean waitingExtraResponse;
+
+    // ===================================================================
+    // Phase → action dispatcher (State pattern, client-side)
+    // ===================================================================
+
+    /**
+     * Strategy for "what should the client do when it receives a state
+     * snapshot in this phase?". Each {@link GamePhase} value is mapped
+     * (via {@link #PHASE_ACTIONS}) to one strategy instance.
+     * <p>
+     * Two callbacks:
+     * <ul>
+     *   <li>{@link #perform} — called from {@code decideNextAction}; the
+     *       strategy should ask the user for input if it's their turn.</li>
+     *   <li>{@link #printExtras} — called from {@code printGameState};
+     *       the strategy can print phase-specific details (e.g. per-turn
+     *       card budgets during the pick phases).</li>
+     * </ul>
+     * Both have empty implementations by default so phases that don't
+     * need them just don't override.
+     * <p>
+     * Implemented as an abstract class (rather than an interface with
+     * default methods) so the pattern is familiar to anyone who has
+     * only seen "classes with empty methods you can override" — no Java
+     * 8+ interface features required.
+     */
+    private static abstract class ClientPhaseAction {
+        /** Default: do nothing. */
+        public void perform(Client client, GameStateDto state) {
+            // Nothing to do for this phase.
+        }
+
+        /** Default: print no extras. */
+        public void printExtras(Client client, GameStateDto state) {
+            // Nothing to print for this phase.
+        }
+    }
+
+    /**
+     * Phase-to-action registry. Populated once in the static block
+     * below. {@link EnumMap} is just a {@link Map} optimized for enum
+     * keys — we use {@code put} / {@code get} on it the same way as a
+     * {@code HashMap}.
+     */
+    private static final Map<GamePhase, ClientPhaseAction> PHASE_ACTIONS =
+            new EnumMap<GamePhase, ClientPhaseAction>(GamePhase.class);
+
+    /** Reusable no-op action (lobby waits, RESOLVE, PAUSED). */
+    private static final ClientPhaseAction NO_OP = new ClientPhaseAction() { };
+
+    static {
+        // Lobby phases that don't need any per-phase prompt beyond the
+        // unconditional nickname prompt at the top of decideNextAction.
+        PHASE_ACTIONS.put(GamePhase.WAITING_FOR_NICKNAME, NO_OP);
+        PHASE_ACTIONS.put(GamePhase.WAITING_FOR_PLAYERS, NO_OP);
+
+        PHASE_ACTIONS.put(GamePhase.WAITING_FOR_PLAYER_COUNT, new ClientPhaseAction() {
+            @Override public void perform(Client c, GameStateDto state) {
+                if (c.isMyTurn(state) && !c.waitingPlayerCountResponse) {
+                    c.askPlayerCount();
+                }
+            }
+        });
+        PHASE_ACTIONS.put(GamePhase.COLOR_PICKING, new ClientPhaseAction() {
+            @Override public void perform(Client c, GameStateDto state) {
+                if (c.isMyTurn(state) && !c.waitingColorResponse) {
+                    c.askColor();
+                }
+            }
+        });
+        PHASE_ACTIONS.put(GamePhase.PICK_OFFERING_TILE, new ClientPhaseAction() {
+            @Override public void perform(Client c, GameStateDto state) {
+                if (c.isMyTurn(state) && !c.waitingOfferingTileResponse) {
+                    c.askOfferingTile();
+                }
+            }
+        });
+        // Helper: the printExtras body for the two TURN_PICK_* phases is
+        // identical (both show the per-turn budgets). Defining it once
+        // would need a shared anonymous-class instance; keeping the two
+        // small overrides verbatim is clearer.
+        PHASE_ACTIONS.put(GamePhase.TURN_PICK_CARDS_CHARACTER, new ClientPhaseAction() {
+            @Override public void perform(Client c, GameStateDto state) {
+                if (c.isMyTurn(state) && !c.waitingCharactersResponse) {
+                    c.askCharacterCards();
+                }
+            }
+            @Override public void printExtras(Client c, GameStateDto state) {
+                c.printPickBudgets(state);
+            }
+        });
+        PHASE_ACTIONS.put(GamePhase.TURN_PICK_CARDS_BUILDING, new ClientPhaseAction() {
+            @Override public void perform(Client c, GameStateDto state) {
+                if (c.isMyTurn(state) && !c.waitingBuildingsResponse) {
+                    c.askBuildingCards();
+                }
+            }
+            @Override public void printExtras(Client c, GameStateDto state) {
+                c.printPickBudgets(state);
+            }
+        });
+        PHASE_ACTIONS.put(GamePhase.RESET_TURN_ORDER_AND_PICK_EXTRA_BUILDING,
+                new ClientPhaseAction() {
+            @Override public void perform(Client c, GameStateDto state) {
+                if (c.isMyTurn(state) && !c.waitingExtraResponse) {
+                    c.askExtraPick();
+                }
+            }
+        });
+
+        // Phases without per-player input.
+        PHASE_ACTIONS.put(GamePhase.RESOLVE_BUILDINGS_AND_EVENTS, NO_OP);
+        PHASE_ACTIONS.put(GamePhase.PAUSED_WAITING_RECONNECT, NO_OP);
+
+        PHASE_ACTIONS.put(GamePhase.GAME_ENDED, new ClientPhaseAction() {
+            @Override public void perform(Client c, GameStateDto state) {
+                c.printEndOfGame(state);
+            }
+        });
+    }
 
     // ===================================================================
     // Entry point
@@ -229,49 +350,12 @@ public class Client {
             return;
         }
 
-        // Per-phase prompt only when it's our turn (or the phase has no
-        // turn concept, like RESOLVE_BUILDINGS_AND_EVENTS).
-        GamePhase phase = state.getPhase();
-
-        if (phase == GamePhase.WAITING_FOR_PLAYER_COUNT
-                && isMyTurn(state)
-                && !waitingPlayerCountResponse) {
-            askPlayerCount();
-            return;
-        }
-        if (phase == GamePhase.COLOR_PICKING
-                && isMyTurn(state)
-                && !waitingColorResponse) {
-            askColor();
-            return;
-        }
-        if (phase == GamePhase.PICK_OFFERING_TILE
-                && isMyTurn(state)
-                && !waitingOfferingTileResponse) {
-            askOfferingTile();
-            return;
-        }
-        if (phase == GamePhase.TURN_PICK_CARDS_CHARACTER
-                && isMyTurn(state)
-                && !waitingCharactersResponse) {
-            askCharacterCards();
-            return;
-        }
-        if (phase == GamePhase.TURN_PICK_CARDS_BUILDING
-                && isMyTurn(state)
-                && !waitingBuildingsResponse) {
-            askBuildingCards();
-            return;
-        }
-        if (phase == GamePhase.RESET_TURN_ORDER_AND_PICK_EXTRA_BUILDING
-                && isMyTurn(state)
-                && !waitingExtraResponse) {
-            askExtraPick();
-            return;
-        }
-
-        if (phase == GamePhase.GAME_ENDED) {
-            printEndOfGame(state);
+        // Polymorphic dispatch: each phase has a strategy that knows
+        // what (if anything) to ask the user. Default for phases without
+        // input is the NO_OP strategy. No if-else chain needed.
+        ClientPhaseAction action = PHASE_ACTIONS.get(state.getPhase());
+        if (action != null) {
+            action.perform(this, state);
         }
     }
 
@@ -585,14 +669,12 @@ public class Client {
         System.out.println("Current player: " + state.getCurrentPlayerNickname());
         System.out.println("Available colors: " + state.getAvailableColors());
 
-        // Per-turn budgets only meaningful in the picking phases.
-        GamePhase p = state.getPhase();
-        if (p == GamePhase.TURN_PICK_CARDS_CHARACTER
-                || p == GamePhase.TURN_PICK_CARDS_BUILDING) {
-            System.out.println("Char budget:    upper=" + state.getUpperRowCardsToDraw()
-                    + " lower=" + state.getLowerRowCardsToDraw());
-            System.out.println("Build leftover: upper=" + state.getUpperRowCardsRemainingForBuilding()
-                    + " lower=" + state.getLowerRowCardsRemainingForBuilding());
+        // Per-phase extras (e.g. per-turn budgets during the pick phases).
+        // Polymorphic dispatch via the strategy registry — no if-else
+        // chain needed.
+        ClientPhaseAction action = PHASE_ACTIONS.get(state.getPhase());
+        if (action != null) {
+            action.printExtras(this, state);
         }
 
         // Resources: only useful once the match has started.
@@ -606,6 +688,18 @@ public class Client {
         System.out.println("Message: " + state.getMessage());
         System.out.println("================================");
         System.out.println();
+    }
+
+    /**
+     * Prints the per-turn card budgets — only meaningful in the
+     * {@code TURN_PICK_*} phases. Called by the corresponding
+     * {@link ClientPhaseAction#printExtras} overrides.
+     */
+    private void printPickBudgets(GameStateDto state) {
+        System.out.println("Char budget:    upper=" + state.getUpperRowCardsToDraw()
+                + " lower=" + state.getLowerRowCardsToDraw());
+        System.out.println("Build leftover: upper=" + state.getUpperRowCardsRemainingForBuilding()
+                + " lower=" + state.getLowerRowCardsRemainingForBuilding());
     }
 
     /** Prints the leaderboard + winner list when the game ends. */
