@@ -28,10 +28,6 @@ class PlayerTest {
         player = new Player("TestUser", TotemColor.RED);
     }
 
-    // =================================================================================
-    // HELPER METHODS
-    // =================================================================================
-
     /**
      * Creates a dummy {@link BuildingCard} for testing purposes.
      * <p>
