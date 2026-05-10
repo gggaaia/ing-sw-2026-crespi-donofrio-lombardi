@@ -55,8 +55,10 @@ public class Client {
     /** Wire input stream for {@link ServerMessage}s. */
     private ObjectInputStream in;
 
-    /** Reads the user's console input. */
+    /*
+    /** Reads the user's console input.
     private final Scanner scanner = new Scanner(System.in);
+    */
 
     // === Local state ====================================================
 
@@ -379,15 +381,15 @@ public class Client {
     // Per-phase prompts
     // ===================================================================
 
-    private void askNickname() {
+    /*private void askNickname() {
         System.out.print("Choose nickname: ");
         String nickname = scanner.nextLine();
         pendingNickname = nickname;
         waitingNicknameResponse = true;
         send(new SetNicknameMessage(nickname));
-    }
+    }*/
 
-    private void askPlayerCount() {
+    /*private void askPlayerCount() {
         System.out.print("Choose number of players (2..5): ");
         try {
             int count = Integer.parseInt(scanner.nextLine().trim());
@@ -397,9 +399,9 @@ public class Client {
             System.out.println("Invalid number, try again.");
             askPlayerCount();
         }
-    }
+    }*/
 
-    private void askColor() {
+    /*private void askColor() {
         List<TotemColor> available = currentGameState.getAvailableColors();
         System.out.print("Available colors: ");
         for (int i = 0; i < available.size(); i++) {
@@ -419,9 +421,9 @@ public class Client {
         }
         waitingColorResponse = true;
         send(new PickColorMessage(parsed));
-    }
+    }*/
 
-    private void askOfferingTile() {
+    /*private void askOfferingTile() {
         Board board = currentGameState.getBoard();
         if (board == null) {
             System.out.println("Board not yet available.");
@@ -450,9 +452,9 @@ public class Client {
             System.out.println("Invalid number, try again.");
             askOfferingTile();
         }
-    }
+    }*/
 
-    private void askCharacterCards() {
+    /*private void askCharacterCards() {
         Board board = currentGameState.getBoard();
         if (board == null) {
             System.out.println("Board not yet available.");
@@ -481,9 +483,9 @@ public class Client {
 
         waitingCharactersResponse = true;
         send(new PickCharacterCardsMessage(upperIds, lowerIds));
-    }
+    }*/
 
-    private void askBuildingCards() {
+    /*private void askBuildingCards() {
         Board board = currentGameState.getBoard();
         if (board == null) {
             System.out.println("Board not yet available.");
@@ -511,9 +513,9 @@ public class Client {
 
         waitingBuildingsResponse = true;
         send(new PickBuildingCardsMessage(upperIds, lowerIds));
-    }
+    }*/
 
-    private void askExtraPick() {
+    /*private void askExtraPick() {
         Board board = currentGameState.getBoard();
         if (board == null) {
             System.out.println("Board not yet available.");
@@ -558,7 +560,7 @@ public class Client {
             System.out.println("Invalid id: " + parts[1]);
             askExtraPick();
         }
-    }
+    }*/
 
     // ===================================================================
     // Console-input helpers
@@ -573,7 +575,7 @@ public class Client {
      * @param maxCount     maximum number of IDs the server will accept
      * @return list of parsed IDs (possibly empty), or {@code null} on error
      */
-    private List<Integer> readCardIds(String prompt, int maxCount) {
+    /*private List<Integer> readCardIds(String prompt, int maxCount) {
         System.out.print(prompt);
         String line = scanner.nextLine();
         if (line == null) {
@@ -606,9 +608,9 @@ public class Client {
             ids.add(Integer.valueOf(id));
         }
         return ids;
-    }
+    }*/
 
-    private void printCharactersInRow(String label, CardRow row) {
+    /*private void printCharactersInRow(String label, CardRow row) {
         if (row == null) {
             System.out.println("  " + label + " row not available");
             return;
@@ -619,9 +621,9 @@ public class Client {
             CharacterCard c = chars.get(i);
             System.out.println("    ID " + c.getCardID() + " :: " + c.getClass().getSimpleName());
         }
-    }
+    }*/
 
-    private void printBuildingsInRow(String label, CardRow row) {
+    /*private void printBuildingsInRow(String label, CardRow row) {
         if (row == null) {
             System.out.println("  " + label + " row not available");
             return;
@@ -634,7 +636,7 @@ public class Client {
                     + " cost=" + b.getFoodCost()
                     + " :: " + b.getClass().getSimpleName());
         }
-    }
+    }*/
 
     // ===================================================================
     // Outgoing wire write
@@ -654,7 +656,7 @@ public class Client {
     // Pretty-printing the game state
     // ===================================================================
 
-    private void printGameState(GameStateDto state) {
+    /*private void printGameState(GameStateDto state) {
         System.out.println();
         System.out.println("========== GAME STATE ==========");
         System.out.println("Phase:          " + state.getPhase());
@@ -688,22 +690,22 @@ public class Client {
         System.out.println("Message: " + state.getMessage());
         System.out.println("================================");
         System.out.println();
-    }
+    }*/
 
     /**
      * Prints the per-turn card budgets — only meaningful in the
      * {@code TURN_PICK_*} phases. Called by the corresponding
      * {@link ClientPhaseAction#printExtras} overrides.
      */
-    private void printPickBudgets(GameStateDto state) {
+    /*private void printPickBudgets(GameStateDto state) {
         System.out.println("Char budget:    upper=" + state.getUpperRowCardsToDraw()
                 + " lower=" + state.getLowerRowCardsToDraw());
         System.out.println("Build leftover: upper=" + state.getUpperRowCardsRemainingForBuilding()
                 + " lower=" + state.getLowerRowCardsRemainingForBuilding());
-    }
+    }*/
 
     /** Prints the leaderboard + winner list when the game ends. */
-    private void printEndOfGame(GameStateDto state) {
+    /*private void printEndOfGame(GameStateDto state) {
         System.out.println("=========== GAME OVER ===========");
         Map<String, Integer> food = state.getPlayerFood();
         Map<String, Integer> prestige = state.getPlayerPrestige();
@@ -723,5 +725,5 @@ public class Client {
             System.out.println("Shared victory between: " + winners);
         }
         System.out.println("=================================");
-    }
+    }*/
 }
