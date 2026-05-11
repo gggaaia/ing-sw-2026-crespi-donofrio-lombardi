@@ -1,12 +1,18 @@
 package it.polimi.ingsw.network.client;
 
 import it.polimi.ingsw.model.Board;
+import it.polimi.ingsw.model.CardRow;
 import it.polimi.ingsw.model.OfferingTile;
+import it.polimi.ingsw.model.card.Card;
 import it.polimi.ingsw.model.enums.TotemColor;
 import it.polimi.ingsw.network.shared.GameStateDto;
 import it.polimi.ingsw.network.shared.messages.client.PickColorMessage;
 import it.polimi.ingsw.view.GameView;
+
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class ClientController {
     private final GameView view;
@@ -15,6 +21,8 @@ public class ClientController {
     private boolean waitingColorResponse = false;
     private boolean waitingOfferingTileResponse = false;
     private boolean waitingCharactersResponse  = false;
+    private boolean waitingBuildingsResponse = false;
+    private boolean waitingExtraResponse = false;
     private String pendingNickname;
 
     //TODO: aggiornare il builder quando inevitabilmente stabiliamo bene il ClientController
@@ -103,7 +111,8 @@ public class ClientController {
     //TODO: add board not null check?
     public void handleOfferingTileRequest(Board board){
         List<OfferingTile> track = board.getOfferingTrack();
-        view.askOfferingTile(track);}
+        view.askOfferingTile(track);
+    }
 
 
     public void onOfferingTileInput(String input, List<OfferingTile> track){
@@ -130,24 +139,9 @@ public class ClientController {
         }
     }
 
-    public void handleCharacterCardsRequest(GameStateDto gameState){
+    public void handleCharacterCardsRequest(GameStateDto gameState){ view.askCharacterCards(gameState); }
 
-        view.askCharacterCards(GameStateDto gameState;
-    }
-
-    private List<Integer> parseIds(String input) throws NumberFormatException {
-        if (input == null || input.trim().isEmpty()) return new ArrayList<>();
-        return Arrays.stream(input.trim().split("\\s+"))
-                .map(Integer::parseInt)
-                .collect(Collectors.toList());
-    }
-
-    private boolean validateIdsOnBoard(List<Integer> chosenIds, List<Card> row) {
-        List<Integer> availableIds = row.stream().map(Card::getCardID).collect(Collectors.toList());
-        return availableIds.containsAll(chosenIds);
-    }
-
-    public void onCharacterCardsInput(GameStateDto gameState, List<Integer> upperIds, List<Integer> lowerIds){
+    public void onCharacterCardsInput(GameStateDto gameState, List<Integer> upperIds, List<Integer> lowerIds) {
         if (waitingCharactersResponse) return;
 
         int upperBudget = gameState.getUpperRowCardsToDraw();
@@ -158,8 +152,7 @@ public class ClientController {
                 view.askCharacterCards(gameState);
                 return;
             }
-            //TODO:check This
-            // 3. Validazione esistenza ID sulla Board
+            Board board=gameState.getBoard();
             if (!validateIdsOnBoard(upperIds, board.getUpperRow()) ||
                     !validateIdsOnBoard(lowerIds, board.getLowerRow())) {
                 view.displayError("One or more selected IDs are not available on the board!");
@@ -167,12 +160,91 @@ public class ClientController {
                 return;
             }
             waitingCharactersResponse = true;
+            //TODO: implements call to virtualClient
             virtualClient.pickCharacterCards(upperIds, lowerIds);
 
         } catch (NumberFormatException e) {
             view.displayError("Invalid format! Please enter space-separated numbers.");
             view.askCharacterCards(gameState);
         }
+    }
+
+    //FIXME: viene aggiornato il contatore di carte che possono essere prese?
+    public void handleBuildingCardsRequest(GameStateDto gameState) { view.askBuildingCards(gameState);}
+
+    public void onBuildingCardsInput(GameStateDto gameState, List<Integer> upperIds, List<Integer> lowerIds) {
+        if(waitingBuildingsResponse) return;
+
+        int upperBudget = gameState.getUpperRowCardsToDraw();
+        int lowerBudget = gameState.getLowerRowCardsToDraw();
+        try {
+            if (upperIds.size() > upperBudget || lowerIds.size() > lowerBudget) {
+                view.displayError("Budget exceeded! Max upper: " + upperBudget + ", Max lower: " + lowerBudget);
+                view.askBuildingCards(gameState);
+                return;
+            }
+            Board board=gameState.getBoard();
+            if (!validateIdsOnBoard(upperIds, board.getUpperRow()) ||
+                    !validateIdsOnBoard(lowerIds, board.getLowerRow())) {
+                view.displayError("One or more selected IDs are not available on the board!");
+                view.askBuildingCards(gameState);
+                return;
+            }
+            waitingBuildingsResponse = true;
+            //TODO: implements call to virtualClient
+            virtualClient.pickBuildingCards(upperIds, lowerIds);
+
+        } catch (NumberFormatException e) {
+            view.displayError("Invalid format! Please enter space-separated numbers.");
+            view.askBuildingCards(gameState);
+        }
+    }
+
+    public void handleExtraPickRequest(GameStateDto gameState){
+        view.askExtraPick(gameState);
+    }
+
+    public void onExtraPickInput(GameStateDto gameState,Integer id) {
+        if (waitingExtraResponse) return;
+
+        List<Integer> list = new ArrayList<>();
+        list.add(id);
+        Board board=gameState.getBoard();
+
+        if (!validateIdsOnBoard(list, board.getUpperRow())) {
+            view.displayError("The selected IDs is not available on the board!");
+            view.askCharacterCards(gameState);
+            return;
+        }
+
+        /*boolean isCharacter;
+        if (type.equalsIgnoreCase("character")) {
+            isCharacter = true;
+        } else if (type.equalsIgnoreCase("building")) {
+            isCharacter = false;
+        } else {
+            view.displayError("Invalid category selected");
+            return;
+        }*/
+
+        waitingExtraResponse = true;
+        virtualClient.pickExtraCard(id);
+    }
+
+    public void skipExtraCard(){
+        virtualClient.skipExtraCard();
+    }
 
 
+    /*private List<Integer> parseIds(String input) throws NumberFormatException {
+        if (input == null || input.trim().isEmpty()) return new ArrayList<>();
+        return Arrays.stream(input.trim().split("\\s+"))
+                .map(Integer::parseInt)
+                .collect(Collectors.toList());
+    }*/
+
+    private boolean validateIdsOnBoard(List<Integer> chosenIds, CardRow row) {
+        List<Integer> availableIds = row.getCharacterCards().stream().map(Card::getCardID).toList();
+        return availableIds.containsAll(chosenIds);
+    }
 }

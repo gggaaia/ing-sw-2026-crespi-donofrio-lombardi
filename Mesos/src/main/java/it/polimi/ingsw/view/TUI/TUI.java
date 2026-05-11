@@ -67,11 +67,6 @@ public class TUI implements GameView {
 
     @Override
     public void askCharacterCards(GameStateDto gameState) {
-        /*Board board = currentGameState.getBoard();
-        if (board == null) {
-            System.out.println("Board not yet available.");
-            return;
-        }*/
         Board board = gameState.getBoard();
         int upperBudget = gameState.getUpperRowCardsToDraw();
         int lowerBudget = gameState.getLowerRowCardsToDraw();
@@ -88,23 +83,20 @@ public class TUI implements GameView {
             return;
         }
         controller.onCharacterCardsInput(gameState, upperIds, lowerIds);
-        //send(new PickCharacterCardsMessage(upperIds, lowerIds));
     }
 
-    public void askBuildingCards(Board board, int upperBudget, int lowerBudget) {
+    @Override
+    public void askBuildingCards(GameStateDto gameState) {
         /*Board board = currentGameState.getBoard();
         if (board == null) {
             System.out.println("Board not yet available.");
             return;
-        }
-        int upperBudget = currentGameState.getUpperRowCardsRemainingForBuilding();
-        int lowerBudget = currentGameState.getLowerRowCardsRemainingForBuilding();*/
+        } */
+        Board board = gameState.getBoard();
+        int upperBudget = gameState.getUpperRowCardsRemainingForBuilding();
+        int lowerBudget = gameState.getLowerRowCardsRemainingForBuilding();
 
-        System.out.println("BUILDING PHASE: you may buy up to " + upperBudget
-                + " upper-row building(s) and up to " + lowerBudget
-                + " lower-row building(s).");
-        printBuildingsInRow("Upper", board.getUpperRow());
-        printBuildingsInRow("Lower", board.getLowerRow());
+        TUIPrinter.printBuildingDrawingPhase(board, upperBudget, lowerBudget);
 
         List<Integer> upperIds = readCardIds(
                 "Upper-row building IDs (space-separated, empty for none): ",
@@ -113,39 +105,41 @@ public class TUI implements GameView {
                 "Lower-row building IDs (space-separated, empty for none): ",
                 lowerBudget);
         if (upperIds == null || lowerIds == null) {
-            askBuildingCards();
+            askBuildingCards(gameState);
             return;
         }
-
-        waitingBuildingsResponse = true;
-        send(new PickBuildingCardsMessage(upperIds, lowerIds));
+        controller.onBuildingCardsInput(gameState, upperIds, lowerIds);
+        //send(new PickBuildingCardsMessage(upperIds, lowerIds));
     }
 
-    public void askExtraPick(Board board) {
-        /*Board board = currentGameState.getBoard();
-        if (board == null) {
-            System.out.println("Board not yet available.");
-            return;
-        }*/
-        System.out.println("EXTRA PICK PHASE: you own the special building. Pick ONE extra card or skip.");
-        System.out.println("Available characters:");
-        printCharactersInRow("Upper", board.getUpperRow());
-        printCharactersInRow("Lower", board.getLowerRow());
-        System.out.println("Available buildings:");
-        printBuildingsInRow("Upper", board.getUpperRow());
-        printBuildingsInRow("Lower", board.getLowerRow());
-
-        System.out.print("Type 'skip', 'character <id>' or 'building <id>': ");
+    public void askExtraPick(GameStateDto gameState) {
+        Board board = gameState.getBoard();
+        TUIPrinter.printExtraPickPhase(board);
         String line = scanner.nextLine().trim();
         if (line.equalsIgnoreCase("skip") || line.isEmpty()) {
-            waitingExtraResponse = true;
-            send(new PickExtraCardMessage(null, false));
+            controller.skipExtraCard();
             return;
         }
-        String[] parts = line.split("\\s+");
+
+        if (line.split("\\s+").length > 1) {
+            displayError("Invalid input: please enter only ONE ID.");
+            askExtraPick(gameState);
+            return;
+        }
+
+        try {
+            int id = Integer.parseInt(line);
+            controller.onExtraPickInput(gameState, id);
+
+        } catch (NumberFormatException e) {
+            displayError("Invalid input: '" + line + "' is not a valid ID or command.");
+            askExtraPick(gameState);
+        }
+
+        /*String[] parts = line.split("\\s+");
         if (parts.length != 2) {
-            System.out.println("Invalid input.");
-            askExtraPick();
+            displayError("Invalid input.");
+            askExtraPick(gameState);
             return;
         }
         boolean isCharacter;
@@ -154,7 +148,7 @@ public class TUI implements GameView {
         } else if (parts[0].equalsIgnoreCase("building")) {
             isCharacter = false;
         } else {
-            System.out.println("Invalid kind: " + parts[0]);
+            displayError("Invalid kind: " + parts[0]);
             askExtraPick();
             return;
         }
@@ -163,9 +157,9 @@ public class TUI implements GameView {
             waitingExtraResponse = true;
             send(new PickExtraCardMessage(Integer.valueOf(id), isCharacter));
         } catch (NumberFormatException e) {
-            System.out.println("Invalid id: " + parts[1]);
+            displayError("Invalid id: " + parts[1]);
             askExtraPick();
-        }
+        }*/
     }
 
     public List<Integer> readCardIds(String prompt, int maxCount) {
@@ -193,12 +187,12 @@ public class TUI implements GameView {
                 displayError("Invalid ID: " + tokens[i]);
                 return null;
             }
-            if (seen.contains(Integer.valueOf(id))) {
+            if (seen.contains(id)) {
                 displayError("Duplicate ID: " + id);
                 return null;
             }
-            seen.add(Integer.valueOf(id));
-            ids.add(Integer.valueOf(id));
+            seen.add(id);
+            ids.add(id);
         }
         return ids;
     }

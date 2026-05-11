@@ -20,6 +20,6 @@ public interface GameView {
     void askColor(List<TotemColor> available);
     void askOfferingTile(List<OfferingTile> track);
     void askCharacterCards(GameStateDto gameState);
-    void askBuildingCards(Board board, int upperBudget, int lowerBudget);
-    void askExtraPick(Board board);
+    void askBuildingCards(GameStateDto gameState);
+    void askExtraPick(GameStateDto gameState);
 }

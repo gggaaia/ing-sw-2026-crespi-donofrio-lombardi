@@ -108,10 +108,16 @@ public class TUIPrinter {
     }
 
     public static void printBuildingDrawingPhase(Board board, int upperBudget, int lowerBudget){
-
+        System.out.println(ANSI_BLUE + "BUILDING DRAWING PHASE:" + ANSI_RESET +
+                " pick up to " + ANSI_YELLOW + upperBudget + ANSI_RESET +
+                " upper-row building(s) and up to " +
+                ANSI_YELLOW + lowerBudget + ANSI_RESET +
+                " lower-row building(s).");
+        printBuildingsInRow("Upper", board.getUpperRow());
+        printBuildingsInRow("Lower", board.getLowerRow());
     }
 
-    public void printBuildingsInRow(String label, CardRow row) {
+    public static void printBuildingsInRow(String label, CardRow row) {
         if (row == null) {
             System.out.println("  " + label + " row not available");
             return;
@@ -121,9 +127,21 @@ public class TUIPrinter {
         for (int i = 0; i < buildings.size(); i++) {
             BuildingCard b = buildings.get(i);
             System.out.println("    ID " + b.getCardID()
+                    + " [" + b.getClass().getSimpleName() + "]"
                     + " cost=" + b.getFoodCost()
-                    + " :: " + b.getClass().getSimpleName());
+                    + " PP=" + b.getEndOfGamePP());
         }
+    }
+
+    public static void printExtraPickPhase(Board board){
+        System.out.println(ANSI_BLUE + "EXTRA PICK:"+ ANSI_RESET + "you own the special building. Pick " +
+                        ANSI_YELLOW + "ONE" + ANSI_RESET+
+                        " extra card or skip.");
+        System.out.println("-Available characters:");
+        printCharactersInRow("Upper", board.getUpperRow());
+        System.out.println("-Available buildings:");
+        printBuildingsInRow("Upper", board.getUpperRow());
+        System.out.print("Type 'skip', 'character <id>' or 'building <id>': ");
     }
 
     public void printGameState(GameStateDto state) {
