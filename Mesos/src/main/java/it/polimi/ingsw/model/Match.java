@@ -6,9 +6,6 @@ import it.polimi.ingsw.model.card.BuildingCard;
 import it.polimi.ingsw.model.card.EventCard;
 import it.polimi.ingsw.model.enums.Era;
 import it.polimi.ingsw.model.enums.TotemColor;
-import it.polimi.ingsw.model.state.LobbyState;
-import it.polimi.ingsw.model.state.MatchState;
-
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Date;
@@ -33,7 +30,6 @@ public class Match implements Serializable {
     public static final int FINAL_ROUND = 11;
 
     private final int matchID;
-    private MatchState status = new LobbyState();
     private final Date date = new Date();
     private final List<Player> playersList = new ArrayList<>();
     private int currentRound = 0;
