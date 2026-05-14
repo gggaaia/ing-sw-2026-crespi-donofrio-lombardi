@@ -12,6 +12,15 @@ import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+/**
+ * Test class for the {@link Ritual} event card.
+ * <p>
+ * Verifies the correct distribution of Prestige Points based on the players'
+ * star rankings (minimum and maximum stars). The tests cover standard
+ * standings, tie scenarios (where players are simultaneously max and min),
+ * and the application of specific building modifiers that can double the
+ * reward or nullify the penalty.
+ */
 class RitualTest {
 
     private Ritual ritual;
@@ -23,7 +32,12 @@ class RitualTest {
         ritual = new Ritual(1, Era.ERA_1, 2, false, 5, 3);
     }
 
-    // Helper method to create a dummy building with custom multipliers for testing purposes
+    /**
+     * Helper method to create a mock building with custom multipliers for testing purposes.
+     * * @param ritualMultiplier the multiplier applied to the winning bonus (e.g., 2 to double it).
+     * @param safeMultiplier the multiplier applied to the losing malus (e.g., 0 to nullify it).
+     * @return a dummy {@link BuildingCard} with the specified multiplier behaviors.
+     */
     private BuildingCard createHelperBuilding(int ritualMultiplier, int safeMultiplier) {
         return new BuildingCard(0, Era.ERA_1, 0, 0, 0, null) {
             @Override
@@ -38,6 +52,11 @@ class RitualTest {
         };
     }
 
+    /**
+     * Verifies the edge case where all players have the exact same number of stars.
+     * In this tie scenario, all players are considered both the "maximum" and
+     * the "minimum", thus receiving both the bonus and the malus simultaneously.
+     */
     @Test
     @DisplayName("All players tied (max == min): Everyone gets both bonus and malus")
     void testApplyEvent_AllPlayersTied_NoBuildings() {
@@ -54,6 +73,11 @@ class RitualTest {
         assertEquals(2, p2.getPrestigePoints(), "Bob should get net 2 PP");
     }
 
+    /**
+     * Verifies that building modifiers are applied correctly even when players
+     * are tied for both first and last place. Each player should process their
+     * respective building modifiers independently on the shared base values.
+     */
     @Test
     @DisplayName("All players tied: Building modifiers are applied correctly")
     void testApplyEvent_AllPlayersTied_WithBuildings() {
@@ -76,6 +100,11 @@ class RitualTest {
         assertEquals(5, p2.getPrestigePoints());
     }
 
+    /**
+     * Verifies the standard behavior of the Ritual event with distinct rankings.
+     * The player with the most stars receives the bonus, the player with the
+     * least stars receives the malus, and players in the middle remain unaffected.
+     */
     @Test
     @DisplayName("Distinct standings: Max gets bonus, Min gets malus, middle is safe")
     void testApplyEvent_DistinctStandings_NoBuildings() {
@@ -100,6 +129,11 @@ class RitualTest {
         assertEquals(-3, minPlayer.getPrestigePoints());
     }
 
+    /**
+     * Verifies that building modifiers work correctly for players with distinct rankings.
+     * The top player should be able to double their bonus, and the bottom player
+     * should be able to nullify their penalty using the appropriate buildings.
+     */
     @Test
     @DisplayName("Distinct standings: Building modifiers work for winners and losers")
     void testApplyEvent_DistinctStandings_WithBuildings() {

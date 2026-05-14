@@ -27,8 +27,6 @@ class TurnOrderTileTest {
     @BeforeEach
     void setUp() {
         tile3Players = new TurnOrderTile(3);
-        // Usiamo Blu e Giallo per i giocatori "piazzati",
-        // lasciando il Rosso libero per testare l'eccezione.
         playerBlue = new Player("Alice", TotemColor.BLUE);
         playerYellow = new Player("Bob", TotemColor.YELLOW);
     }

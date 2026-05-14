@@ -13,16 +13,36 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+/**
+ * Test class for the {@link Sustenance} event card.
+ * <p>
+ * Verifies the mechanics of the "Sustenance" phase, where players must pay
+ * food to support their tribe (based on the number of cards in their hand).
+ * The tests cover standard payments, the correct application of discounts
+ * (via Gatherers and specific Buildings), the clamping of costs to zero,
+ * and the severe Prestige Point penalties applied when a player cannot
+ * afford the required food.
+ */
 class SustenanceTest {
 
     private Sustenance sustenance;
 
+    /**
+     * Initializes the Sustenance event before each test.
+     * The event is configured with a specific malus multiplier (e.g., 3 PP
+     * lost for every unit of missing food).
+     */
     @BeforeEach
     @DisplayName("Setup: Initialize Sustenance event before each test")
     void setUp() {
         sustenance = new Sustenance(1, Era.ERA_1, 2, false, 3);
     }
 
+    /**
+     * Verifies that a player with plenty of food simply pays the required
+     * amount (1 food per card in hand) without suffering any Prestige Point
+     * penalties. No discounts are applied in this scenario.
+     */
     @Test
     @DisplayName("Player with sufficient food pays without discounts")
     void testApplyEvent_SufficientFood_NoDiscounts() {
@@ -39,6 +59,12 @@ class SustenanceTest {
         assertEquals(0, p1.getPrestigePoints(), "Should not lose any Prestige Points (PP)");
     }
 
+    /**
+     * Verifies that the total food cost is correctly reduced when a player
+     * owns Gatherers (Raccoglitori) and specific Buildings that grant
+     * sustenance bonuses. The final cost must accurately reflect the base
+     * cost minus all accumulated discounts.
+     */
     @Test
     @DisplayName("Player successfully uses Gatherer and Building discounts")
     void testApplyEvent_WithGathererAndBuildingDiscounts() {
@@ -65,6 +91,11 @@ class SustenanceTest {
         assertEquals(0, p1.getPrestigePoints());
     }
 
+    /**
+     * Verifies that if the accumulated discounts (from Gatherers or Buildings)
+     * exceed the total food cost (number of cards in hand), the final cost
+     * is clamped to zero. A player should never gain food from this event.
+     */
     @Test
     @DisplayName("Cost never drops below zero when discounts exceed hand size")
     void testApplyEvent_CostIsZeroOrNegative() {
@@ -81,6 +112,11 @@ class SustenanceTest {
         assertEquals(5, p1.getFood(), "Cost is negative, clamped to 0. Food remains 5");
     }
 
+    /**
+     * Verifies the penalty application when a player cannot afford the full
+     * food cost. The player's food should drop to zero, and they must suffer
+     * a Prestige Point penalty proportional to the missing amount of food.
+     */
     @Test
     @DisplayName("Player with insufficient food suffers Prestige Points malus")
     void testApplyEvent_InsufficientFood_AppliesMalus() {
@@ -97,6 +133,11 @@ class SustenanceTest {
         assertEquals(-9, p1.getPrestigePoints(), "Should lose 9 PP for the 3 missing food");
     }
 
+    /**
+     * Verifies that the event correctly and independently processes a list
+     * of multiple players, applying standard costs to those who can afford it
+     * and calculating exact penalties for those who cannot.
+     */
     @Test
     @DisplayName("Event applies correctly to a list of multiple players")
     void testApplyEvent_MultiplePlayers() {

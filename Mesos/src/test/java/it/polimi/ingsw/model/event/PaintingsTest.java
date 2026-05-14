@@ -13,6 +13,14 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+/**
+ * Test class for the {@link Paintings} event card.
+ * <p>
+ * Verifies the correct distribution of penalties and rewards (Prestige Points
+ * and Food) when the Paintings event is resolved. The tests cover scenarios
+ * based on the minimum painter requirement, the calculation of bonus points,
+ * and the specific food bonuses granted by owning certain buildings.
+ */
 class PaintingsTest {
 
     private Paintings paintings;
@@ -24,7 +32,12 @@ class PaintingsTest {
         paintings = new Paintings(1, Era.ERA_1, 2, 2, 3);
     }
 
-    // Helper method to create a helper building that either provides the painting bonus or doesn't
+    /**
+     * Helper method to create a mock building for testing purposes.
+     * * @param hasBonus determines whether this mock building should provide
+     * the special painting bonus to the player.
+     * @return a dummy {@link BuildingCard} with the specified bonus behavior.
+     */
     private BuildingCard createHelperBuilding(boolean hasBonus) {
         return new BuildingCard(0, Era.ERA_1, 0, 0, 0, null) {
             @Override
@@ -34,6 +47,10 @@ class PaintingsTest {
         };
     }
 
+    /**
+     * Verifies that a player who fails to meet the minimum painter requirement
+     * receives a fixed penalty in Prestige Points (-2 PP) and gains no Food.
+     */
     @Test
     @DisplayName("Player with fewer painters than required loses 2 PP")
     void testApplyEvent_NotEnoughPainters() {
@@ -47,6 +64,11 @@ class PaintingsTest {
         assertEquals(0, p1.getFood());
     }
 
+    /**
+     * Verifies the standard reward calculation for a player who meets or exceeds
+     * the minimum painter requirement. The player should receive Prestige Points
+     * equal to their painter count multiplied by the event's bonus modifier.
+     */
     @Test
     @DisplayName("Player meeting the painter requirement gets bonus points per painter")
     void testApplyEvent_EnoughPainters() {
@@ -60,6 +82,11 @@ class PaintingsTest {
         assertEquals(0, p1.getFood());
     }
 
+    /**
+     * Verifies that owning a regular building (without the specific painting bonus)
+     * does not grant any extra Food resources, while the normal Prestige Point
+     * rewards for painters remain unaffected.
+     */
     @Test
     @DisplayName("Buildings without the painting bonus provide 0 food")
     void testApplyEvent_WithBuildings_NoBonus() {
@@ -76,6 +103,11 @@ class PaintingsTest {
         assertEquals(0, p1.getFood());
     }
 
+    /**
+     * Verifies the application of the building bonus. A player owning a building
+     * that provides the painting bonus should receive Food equal to their total
+     * number of painters, in addition to the standard Prestige Points.
+     */
     @Test
     @DisplayName("Buildings with the painting bonus provide food equal to the painter count")
     void testApplyEvent_WithBuildings_WithBonus() {
@@ -93,6 +125,11 @@ class PaintingsTest {
         assertEquals(3, p1.getFood());
     }
 
+    /**
+     * Verifies that the event correctly applies to a list of multiple players,
+     * accurately computing and assigning independent penalties and rewards
+     * for each player based on their unique state (painter count and buildings).
+     */
     @Test
     @DisplayName("Event applies correctly across a list of mixed players")
     void testApplyEvent_MultiplePlayers() {
