@@ -113,6 +113,17 @@ public class Match implements Serializable {
     }
 
     /**
+     * Returns the date and time when this match was created.
+     * A defensive copy is returned to prevent external modifications
+     * to the internal state of the Match.
+     *
+     * @return the creation date of the match
+     */
+    public Date getDate() {
+        return new Date(date.getTime());
+    }
+
+    /**
      * Adds a player to this match if they are not already registered.
      * <p>
      * Players are compared by reference equality (i.e. the same {@link Player}
@@ -315,20 +326,6 @@ public class Match implements Serializable {
         return false;
     }
 
-    public void chooseOfferingTrackPhase() {
-    }
-
-    public void resolveAllOfferingTilesEffect() {
-        List<TotemColor> PlayerTurnOrder = board.getTotemColorTurnOrder();
-
-        //get the player order and status
-        //ask the tile how much food to give the player and does it, ask how many top cards, how many bottom cards to get
-        //receive the index of the card the player want, add the card to the player hand, repeat for the number of card needed
-        //ask the player if it wants to buy a building
-        //cycle to new player
-        //when all player are finished it cycle the player hand calling the DrawingUpperRow method if there are more than 0 cards
-        //in the upper row
-    }
 
     public void resolveEndMatch() {
         for (Player player : playersList) {
@@ -421,21 +418,6 @@ public class Match implements Serializable {
                 }
             }
         }
-    }
-
-    public void startRound() {
-
-        // TODO: implement the logic of the startRound() method
-
-        // movetoNextRoundi)
-
-        // chooseOfferingTrackPhase():
-        
-        // resolveAllOfferinaTilesEffect():
-
-        // resolveEvents():
-
-        // resolveBuildings():
     }
 
 
