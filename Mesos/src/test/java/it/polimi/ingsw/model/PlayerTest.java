@@ -61,8 +61,7 @@ class PlayerTest {
 
     /**
      * Verifies that adding cards updates the player's internal state (such as the
-     * hasBuilding flag) and that the getter methods return defensive copies,
-     * protecting the player's internal lists from external unauthorized modifications.
+     * hasBuilding flag) and that the getter methods return defensive copies.
      */
     @Test
     @DisplayName("Card Inventory: State updates and defensive copies protection")
@@ -110,36 +109,36 @@ class PlayerTest {
         assertEquals(5, player.getStarCounter(), "Stars should be 5 (3 base + 2 bonus).");
     }
 
+
     /**
-     * Verifies the algorithms that count Inventor Icons. Ensures that the system
-     * correctly identifies distinct icon types and groups identical icons to form pairs.
+     * Verifies the calculation logic for Inventor icons.
+     * Ensures that the system correctly counts the number of distinct icons
+     * and accurately calculates the number of matching pairs (2 identical icons = 1 pair),
+     * while safely ignoring characters without an icon (null).
      */
     @Test
     @DisplayName("Inventor Logic: Correctly counts distinct icons and matching pairs")
     void testInventorCalculations() {
-        // Safe check in case the Enum has no values in the current build environment
-        if (InventorIcon.values().length < 2) return;
+        // Add 3 cards with the ARROW icon (creates exactly 1 pair, 1 left over)
+        player.addCardToHand(createDummyCharacter(InventorIcon.ARROW));
+        player.addCardToHand(createDummyCharacter(InventorIcon.ARROW));
+        player.addCardToHand(createDummyCharacter(InventorIcon.ARROW));
 
-        InventorIcon iconA = InventorIcon.values()[0];
-        InventorIcon iconB = InventorIcon.values()[1];
+        // Add 2 cards with the BOAT icon (creates exactly 1 pair)
+        player.addCardToHand(createDummyCharacter(InventorIcon.BOAT));
+        player.addCardToHand(createDummyCharacter(InventorIcon.BOAT));
 
-        // Add 3 cards of Icon A, 2 cards of Icon B, and 1 card with no icon
-        player.addCardToHand(createDummyCharacter(iconA));
-        player.addCardToHand(createDummyCharacter(iconA));
-        player.addCardToHand(createDummyCharacter(iconA));
-
-        player.addCardToHand(createDummyCharacter(iconB));
-        player.addCardToHand(createDummyCharacter(iconB));
-
+        // Add 1 card with no icon to ensure it does not break the mathematical calculations
         player.addCardToHand(createDummyCharacter(null));
 
-        // Distinct check: We have Icon A and Icon B (null is ignored)
-        assertEquals(2, player.countDistinctInventorIcons(), "Should find exactly 2 distinct inventor icons.");
+        // Distinct check: We have ARROW and BOAT (null is ignored)
+        assertEquals(2, player.countDistinctInventorIcons(),
+                "Should find exactly 2 distinct inventor icons (ARROW and BOAT).");
 
-        // Pair check: 3 Icon A = 1 pair. 2 Icon B = 1 pair. Total = 2 pairs.
-        assertEquals(2, player.countInventorPair(), "Should find exactly 2 pairs of inventor icons.");
+        // Pair check: 3 ARROW = 1 pair. 2 BOAT = 1 pair. Total = 2 pairs.
+        assertEquals(2, player.countInventorPair(),
+                "Should find exactly 2 pairs of inventor icons.");
     }
-
     /**
      * Helper method to create a dummy character card with a specific Inventor Icon.
      */
