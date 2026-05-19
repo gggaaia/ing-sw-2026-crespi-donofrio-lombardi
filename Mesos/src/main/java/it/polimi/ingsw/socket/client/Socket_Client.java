@@ -216,4 +216,8 @@ public class Socket_Client implements ServerToClientMessage.Visitor {
     @Override public void visitBoardSnapshot(Board board) {
         controller.boardSnapshot(board);
     }
+
+    @Override public void visitCommit() {
+        controller.commit();
+    }
 }

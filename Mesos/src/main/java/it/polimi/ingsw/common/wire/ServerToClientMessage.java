@@ -55,6 +55,7 @@ public abstract class ServerToClientMessage implements Serializable {
         void visitActionRejected(String reason);
         void visitGameSnapshot(GameSnapshot snapshot);
         void visitBoardSnapshot(Board board);
+        void visitCommit();
     }
 
     // === classi nested (una per evento) ===
@@ -291,5 +292,16 @@ public abstract class ServerToClientMessage implements Serializable {
         private final Board board;
         public BoardSnapshotMsg(Board board) { this.board = board; }
         @Override public void accept(Visitor v) { v.visitBoardSnapshot(board); }
+    }
+
+    /**
+     * Marker di fine bundle: invita il client a fare il refresh
+     * della view e a flushare i log accumulati. Vedi
+     * {@code VirtualView#onCommit}.
+     */
+    public static class Commit extends ServerToClientMessage {
+        private static final long serialVersionUID = 1L;
+        public Commit() {}
+        @Override public void accept(Visitor v) { v.visitCommit(); }
     }
 }

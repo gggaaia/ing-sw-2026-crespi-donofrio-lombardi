@@ -1,5 +1,6 @@
 package it.polimi.ingsw.view.TUI;
 
+import it.polimi.ingsw.common.dto.Phase;
 import it.polimi.ingsw.controller.client.ClientController;
 import it.polimi.ingsw.model.Board;
 import it.polimi.ingsw.model.CardRow;
@@ -64,6 +65,17 @@ public class TuiView implements View {
 
     @Override
     public void refresh(ClientController state) {
+        // Pre-match: in lobby (waiting nickname/count/players) e in
+        // color picking, lato server i Player non sono ancora stati
+        // creati (succede in {@code acceptColorPick}), quindi
+        // food/prestige non sono noti al client e il dump
+        // mostrerebbe solo "Food: ? | PP: ?". L'utente in queste
+        // fasi vede comunque l'INFO log e i prompt; il primo dump
+        // utile arriva al primo {@code *Turn} di gioco con i valori
+        // iniziali a 0 broadcastati da {@code startMatch}.
+        if (isPreMatchPhase(state.getCurrentPhase())) {
+            return;
+        }
         StringBuilder sb = new StringBuilder();
         String nl = System.lineSeparator();
         // Cornice di apertura: linea lunga + banner centrato. Aiuta a
@@ -86,16 +98,11 @@ public class TuiView implements View {
             sb.append("winners:     ").append(state.getFinalWinners()).append(nl);
         }
         sb.append(TuiPrinter.BLUE).append(LONG_SEP).append(TuiPrinter.RESET);
-        // Errore deferred: se il server ha appena rifiutato un'azione
-        // ({@code actionRejected}), il messaggio non viene stampato in
-        // quel momento ma stashato sul controller. Lo tiriamo fuori qui,
-        // in fondo al refresh, cos\u00ec appare vicino al prompt invece
-        // che "sopra" il game state aggiornato.
-        String err = state.consumePendingError();
-        if (err != null) {
-            sb.append(nl).append(TuiPrinter.formatError(err));
-            sb.append(nl).append(TuiPrinter.BLUE).append(LONG_SEP).append(TuiPrinter.RESET);
-        }
+        // NB: l'eventuale pendingError NON viene stampato qui. Lo
+        // gestisce il {@link ClientController#commit()}, che dopo il
+        // dump chiama {@code view.displayError(err)} se serve. Cos\u00ec
+        // ordine sullo schermo \u00e8 sempre: dump, log lines, error,
+        // prompt.
         emitLine(sb.toString());
     }
 
@@ -254,6 +261,21 @@ public class TuiView implements View {
                 System.out.flush();
             }
         }
+    }
+
+    /**
+     * Vero se la fase corrente \u00e8 una fase pre-match in cui il dump
+     * di GAME STATE non ha senso (nessun Player creato, nessun board,
+     * nessun food/prestige). Include anche il caso {@code null}, che
+     * \u00e8 lo stato iniziale del client appena prima del primo
+     * evento dal server.
+     */
+    private static boolean isPreMatchPhase(Phase p) {
+        if (p == null) return true;
+        return p instanceof Phase.WaitingForNickname
+                || p instanceof Phase.WaitingForPlayerCount
+                || p instanceof Phase.WaitingForPlayers
+                || p instanceof Phase.ColorPicking;
     }
 
     // === board / players overview (chiamate da refresh) ===

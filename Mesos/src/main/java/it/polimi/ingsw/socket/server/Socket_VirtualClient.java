@@ -162,6 +162,10 @@ public class Socket_VirtualClient implements VirtualView {
         // Socket_ClientHandler. Lasciamo il body vuoto.
     }
 
+    @Override public void onCommit() throws RemoteException {
+        send(new ServerToClientMessage.Commit());
+    }
+
     private void send(ServerToClientMessage msg) throws RemoteException {
         try {
             synchronized (output) {

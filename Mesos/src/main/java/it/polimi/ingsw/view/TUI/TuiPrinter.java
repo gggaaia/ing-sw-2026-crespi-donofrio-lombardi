@@ -7,6 +7,8 @@ import it.polimi.ingsw.model.card.BuildingCard;
 import it.polimi.ingsw.model.card.CharacterCard;
 import it.polimi.ingsw.model.enums.TotemColor;
 
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -22,13 +24,6 @@ public class TuiPrinter {
     public static final String GREEN = "\u001B[32m";
     public static final String BLUE = "\u001B[34m";
     public static final String YELLOW = "\u001B[33m";
-    /** Bold (ANSI SGR 1). Combinabile con i colori sopra. */
-    public static final String BOLD = "\u001B[1m";
-    /** Tag {@code [INFO]} con sfondo verde brillante e testo nero in
-     *  bold, cos\u00ec il marker salta all'occhio anche in mezzo a un
-     *  blocco di output. SGR: 1 = bold, 30 = fg black, 102 = bg bright
-     *  green. */
-    private static final String INFO_TAG = "\u001B[1;30;102m INFO \u001B[0m";
     /** Bold (ANSI SGR 1). Combinabile con i colori sopra. */
     public static final String BOLD = "\u001B[1m";
     /** Tag {@code [INFO]} con sfondo verde brillante e testo nero in
@@ -64,22 +59,41 @@ public class TuiPrinter {
         sb.append("+");
         for (int i = 0; i < length + 2; i++) sb.append("-");
         sb.append("+").append(nl);
+        sb.append("| ").append(RED).append(fullMessage).append(RESET).append(" |").append(nl);
+        sb.append("+");
+        for (int i = 0; i < length + 2; i++) sb.append("-");
+        sb.append("+");
+        return sb.toString();
+    }
+
+    /**
+     * Formatter ms-precision (HH:mm:ss.SSS). Statico per non
+     * ricostruirlo a ogni messaggio. Il timestamp \u00e8 quello del
+     * momento in cui il client renderizza la riga di INFO; serve
+     * tipicamente per debug di ordine/batching, vedi commento sotto.
+     */
+    private static final DateTimeFormatter INFO_TIME_FMT =
+            DateTimeFormatter.ofPattern("HH:mm:ss.SSS");
+
     /**
      * Messaggio informativo (es. "Alice piazza il totem 0"). Il tag
      * {@code  INFO } \u00e8 stampato con sfondo verde brillante e testo
      * nero bold; il messaggio stesso \u00e8 in bold. Cos\u00ec
      * l'utente individua subito gli eventi di gioco anche quando
      * scorrono velocemente.
+     *
+     * Timestamp di rendering: ogni riga viene prefissata con l'orario
+     * locale (HH:mm:ss.SSS) calcolato nel momento in cui questa
+     * funzione viene chiamata, cio\u00e8 quando il client sta per
+     * stampare l'evento. Serve per diagnosticare se due righe che
+     * appaiono "insieme" sull'output siano davvero arrivate insieme
+     * (timestamps molto vicini) oppure se la console stia bufferizzando
+     * e renderizzando a blocchi (timestamps distanti). Pu\u00f2 essere
+     * tolto in seguito senza impatto funzionale.
      */
     public static String formatInfo(String message) {
-        return INFO_TAG + " " + BOLD + message + RESET;
-        sb.append("+");
-        return sb.toString();
-    }
-
-    /** Messaggio informativo (es. "Alice piazza il totem 0"). */
-    public static String formatInfo(String message) {
-        return "[" + GREEN + "INFO" + RESET + "] " + message;
+        String ts = LocalTime.now().format(INFO_TIME_FMT);
+        return INFO_TAG + " " + ts + " " + BOLD + message + RESET;
     }
 
     /** Riga compatta per un giocatore. */

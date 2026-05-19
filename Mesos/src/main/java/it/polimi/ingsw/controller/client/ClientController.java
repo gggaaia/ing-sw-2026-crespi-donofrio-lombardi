@@ -69,13 +69,38 @@ public class ClientController {
     /**
      * Errore lato server (es. "tile already occupied") in attesa di
      * essere mostrato. Lo settiamo in {@link #actionRejected} senza
-     * stamparlo subito: il successivo evento *Turn far\u00e0
-     * {@code view.refresh(this)} che si occuper\u00e0 di stamparlo
-     * DOPO il dump dello stato (vedi {@code TuiView.refresh}).
-     * Cos\u00ec l'errore appare in fondo alla schermata, vicino al
-     * prompt, invece di essere "sopra" il game state aggiornato.
+     * stamparlo subito: il successivo {@link #commit()} lo flusha
+     * DOPO il dump dello stato e prima del prompt.
      */
     private String pendingError;
+
+    /**
+     * Log di gioco accumulati dagli handler degli eventi (es.
+     * "A picked RED", "B prestige -> 5", "Round 1 started"). Vengono
+     * stampati in blocco da {@link #commit()} dopo il refresh dello
+     * stato, cos\u00ec l'utente vede prima il dump aggiornato e poi
+     * la cronologia di cosa \u00e8 successo.
+     */
+    private final List<String> pendingLogs = new ArrayList<>();
+
+    /**
+     * Prompt da eseguire al prossimo {@link #commit()}, dopo refresh
+     * e log. Settato dagli handler dei {@code *Turn} quando il turno
+     * \u00e8 nostro. Qui rimane parcheggiato finch\u00e9 commit non
+     * lo invoca: cos\u00ec il blocco su stdin avviene DOPO che
+     * abbiamo finito di renderizzare lo stato (e non a met\u00e0
+     * di un bundle).
+     */
+    private Runnable pendingPrompt;
+
+    /**
+     * Marker che indica che il prossimo {@link #commit()} deve anche
+     * trigghiare {@link #endLatch} (fine partita). Settato in
+     * {@link #gameEnded}. Cos\u00ec il main thread blocca in
+     * {@code awaitGameEnd} finch\u00e9 il dump finale \u00e8 stato
+     * mostrato.
+     */
+    private boolean pendingGameEnded;
 
     /**
      * Latch one-shot che il main thread del client (Rmi_Client.run /
@@ -144,22 +169,20 @@ public class ClientController {
     public synchronized List<String> getFinalWinners()                { return finalWinners == null ? null : new ArrayList<>(finalWinners); }
 
     // ====================================================================
-    // Event handlers (chiamati da Rmi_Client / Socket_Client)
+    // Event handlers (chiamati da Rmi_Client / Socket_Client).
     //
-    // Politica di stampa per evitare di duplicare il game-state dump:
-    //   - aggiorniamo SEMPRE il mini-stato per ogni evento
-    //   - view.refresh(this) viene chiamato SOLO quando \u00e8 il MIO turno
-    //     (subito prima del prompt) o per le transizioni importanti
-    //     (matchStarted, roundStarted, gameEnded, gameSnapshot)
-    //   - per gli altri eventi usiamo view.displayInfo("...") che stampa
-    //     una sola riga sintetica
+    // REGOLA SEMPLICE: ogni handler aggiorna SOLO il mini-stato locale
+    // e accoda eventuali log/prompt. NESSUN handler chiama
+    // view.refresh / view.displayInfo / view.promptXxx direttamente.
+    // L'unico render path \u00e8 {@link #commit()}, invocato dal server
+    // a fine bundle via {@code v.onCommit()}.
     // ====================================================================
 
     public synchronized void playerJoined(String nick) {
         if (!joinedPlayers.contains(nick)) {
             joinedPlayers.add(nick);
         }
-        view.displayInfo(nick + " joined the lobby");
+        pendingLogs.add(nick + " joined the lobby");
     }
 
     public synchronized void awaitPlayerCount(String firstPlayerNick) {
@@ -171,25 +194,29 @@ public class ClientController {
             joinedPlayers.add(firstPlayerNick);
         }
         if (firstPlayerNick.equals(myNickname)) {
-            view.displayInfo("You are the first player. Pick the number of participants.");
-            int count = view.promptPlayerCount();
-            sendOrError(new SafeSend() {
-                @Override public void send() throws RemoteException {
-                    virtualServer.setPlayerCount(myNickname, count);
+            pendingLogs.add("You are the first player. Pick the number of participants.");
+            pendingPrompt = new Runnable() {
+                @Override public void run() {
+                    final int count = view.promptPlayerCount();
+                    sendOrError(new SafeSend() {
+                        @Override public void send() throws RemoteException {
+                            virtualServer.setPlayerCount(myNickname, count);
+                        }
+                    });
                 }
-            });
+            };
         } else {
-            view.displayInfo("Waiting for " + firstPlayerNick + " to set the participant count");
+            pendingLogs.add("Waiting for " + firstPlayerNick + " to set the participant count");
         }
     }
 
     public synchronized void playerCountSet(int count) {
         this.expectedPlayers = count;
-        view.displayInfo("Player count set to " + count);
+        pendingLogs.add("Player count set to " + count);
     }
 
     public synchronized void awaitMorePlayers(int joined, int total) {
-        view.displayInfo("Waiting for more players (" + joined + "/" + total + ")");
+        pendingLogs.add("Waiting for more players (" + joined + "/" + total + ")");
     }
 
     public synchronized void colorTurn(String nick, Set<TotemColor> available) {
@@ -197,71 +224,65 @@ public class ClientController {
         this.currentPlayer = nick;
         this.availableColors = new HashSet<>(available);
         if (nick.equals(myNickname)) {
-            view.refresh(this);
-            TotemColor color = view.promptColor(new HashSet<>(available));
-            final TotemColor c = color;
-            sendOrError(new SafeSend() {
-                @Override public void send() throws RemoteException {
-                    virtualServer.pickColor(myNickname, c);
+            final HashSet<TotemColor> avail = new HashSet<>(available);
+            pendingPrompt = new Runnable() {
+                @Override public void run() {
+                    final TotemColor c = view.promptColor(avail);
+                    sendOrError(new SafeSend() {
+                        @Override public void send() throws RemoteException {
+                            virtualServer.pickColor(myNickname, c);
+                        }
+                    });
                 }
-            });
+            };
         } else {
-            view.displayInfo("Waiting for " + nick + " to pick a color");
+            pendingLogs.add("Waiting for " + nick + " to pick a color");
         }
     }
 
     public synchronized void colorPicked(String nick, TotemColor color) {
         colorsByPlayer.put(nick, color);
         availableColors.remove(color);
-        view.displayInfo(nick + " picked " + color);
+        pendingLogs.add(nick + " picked " + color);
     }
 
     public synchronized void matchStarted(List<String> playerOrder, Era era) {
         this.currentEra = era;
-        // Niente view.refresh(this) qui: il *Turn event che segue
-        // (es. onOfferingTileTurn) far\u00e0 lui il dump dello stato
-        // con la fase corretta (PICK_OFFERING_TILE) e la board che
-        // arriva via onBoardSnapshot. Cos\u00ec evitiamo un dump
-        // intermedio con phase ancora COLOR_PICKING.
-        view.displayInfo("MATCH STARTED. Era: " + era + ". Order: " + playerOrder);
+        pendingLogs.add("MATCH STARTED. Era: " + era + ". Order: " + playerOrder);
     }
 
     public synchronized void eraChanged(Era newEra) {
         this.currentEra = newEra;
-        view.displayInfo("Era changed to " + newEra);
+        pendingLogs.add("Era changed to " + newEra);
     }
 
     public synchronized void roundStarted(int round) {
         this.currentRound = round;
-        view.displayInfo("Round " + round + " started");
+        pendingLogs.add("Round " + round + " started");
     }
 
     public synchronized void offeringTileTurn(String nick, int trackSize) {
         this.currentPhase = Phase.PICK_OFFERING_TILE;
         this.currentPlayer = nick;
         if (nick.equals(myNickname)) {
-            view.refresh(this);
-            int idx = view.promptOfferingTile(trackSize);
-            final int finalIdx = idx;
-            sendOrError(new SafeSend() {
-                @Override public void send() throws RemoteException {
-                    virtualServer.pickOfferingTile(myNickname, finalIdx);
+            final int size = trackSize;
+            pendingPrompt = new Runnable() {
+                @Override public void run() {
+                    final int idx = view.promptOfferingTile(size);
+                    sendOrError(new SafeSend() {
+                        @Override public void send() throws RemoteException {
+                            virtualServer.pickOfferingTile(myNickname, idx);
+                        }
+                    });
                 }
-            });
+            };
         } else {
-            view.displayInfo("Waiting for " + nick + " to place a totem on the offering track");
+            pendingLogs.add("Waiting for " + nick + " to place a totem on the offering track");
         }
     }
 
     public synchronized void offeringTilePicked(String nick, int tileIndex) {
-        view.displayInfo(nick + " placed a totem on offering tile " + tileIndex);
-        // Refresh: il server ha appena mandato un onBoardSnapshot
-        // bundle-ato con questo evento, quindi currentBoard riflette
-        // gi\u00e0 la track con il totem appena piazzato. Un dump qui
-        // permette a chi non \u00e8 il prossimo picker di vedere
-        // l'aggiornamento (chi \u00e8 il prossimo picker lo vedr\u00e0
-        // comunque nel suo onOfferingTileTurn).
-        view.refresh(this);
+        pendingLogs.add(nick + " placed a totem on offering tile " + tileIndex);
     }
 
     public synchronized void characterPickTurn(String nick, int upperBudget, int lowerBudget) {
@@ -270,16 +291,21 @@ public class ClientController {
         this.currentUpperBudget = upperBudget;
         this.currentLowerBudget = lowerBudget;
         if (nick.equals(myNickname)) {
-            view.refresh(this);
-            final List<Integer> upper = view.promptCharacterUpperIds(upperBudget);
-            final List<Integer> lower = view.promptCharacterLowerIds(lowerBudget);
-            sendOrError(new SafeSend() {
-                @Override public void send() throws RemoteException {
-                    virtualServer.pickCharacterCards(myNickname, upper, lower);
+            final int upper = upperBudget;
+            final int lower = lowerBudget;
+            pendingPrompt = new Runnable() {
+                @Override public void run() {
+                    final List<Integer> upperIds = view.promptCharacterUpperIds(upper);
+                    final List<Integer> lowerIds = view.promptCharacterLowerIds(lower);
+                    sendOrError(new SafeSend() {
+                        @Override public void send() throws RemoteException {
+                            virtualServer.pickCharacterCards(myNickname, upperIds, lowerIds);
+                        }
+                    });
                 }
-            });
+            };
         } else {
-            view.displayInfo("Waiting for " + nick + " to pick character cards (upper="
+            pendingLogs.add("Waiting for " + nick + " to pick character cards (upper="
                     + upperBudget + ", lower=" + lowerBudget + ")");
         }
     }
@@ -295,17 +321,7 @@ public class ClientController {
         hand.addAll(upper);
         hand.addAll(lower);
         int total = upper.size() + lower.size();
-        view.displayInfo(nick + " drew " + total + " character card(s)");
-        // Refresh solo se NON sono io il picker: il server ha bundle-ato
-        // questo evento con il successivo onBuildingPickTurn(me) che
-        // far\u00e0 lui il refresh con la fase aggiornata
-        // (TURN_PICK_CARDS_BUILDING) e la mano gi\u00e0 piena. Se
-        // refreshassi anche qui vedrei un dump intermedio con la fase
-        // ancora TURN_PICK_CARDS_CHARACTER, immediatamente sostituito
-        // dal dump corretto del *Turn.
-        if (!nick.equals(myNickname)) {
-            view.refresh(this);
-        }
+        pendingLogs.add(nick + " drew " + total + " character card(s)");
     }
 
     public synchronized void buildingPickTurn(String nick, int upperRemaining, int lowerRemaining) {
@@ -314,16 +330,21 @@ public class ClientController {
         this.currentUpperRemaining = upperRemaining;
         this.currentLowerRemaining = lowerRemaining;
         if (nick.equals(myNickname)) {
-            view.refresh(this);
-            final List<Integer> upper = view.promptBuildingUpperIds(upperRemaining);
-            final List<Integer> lower = view.promptBuildingLowerIds(lowerRemaining);
-            sendOrError(new SafeSend() {
-                @Override public void send() throws RemoteException {
-                    virtualServer.pickBuildingCards(myNickname, upper, lower);
+            final int uRem = upperRemaining;
+            final int lRem = lowerRemaining;
+            pendingPrompt = new Runnable() {
+                @Override public void run() {
+                    final List<Integer> upperIds = view.promptBuildingUpperIds(uRem);
+                    final List<Integer> lowerIds = view.promptBuildingLowerIds(lRem);
+                    sendOrError(new SafeSend() {
+                        @Override public void send() throws RemoteException {
+                            virtualServer.pickBuildingCards(myNickname, upperIds, lowerIds);
+                        }
+                    });
                 }
-            });
+            };
         } else {
-            view.displayInfo("Waiting for " + nick + " to buy buildings (residual upper="
+            pendingLogs.add("Waiting for " + nick + " to buy buildings (residual upper="
                     + upperRemaining + ", lower=" + lowerRemaining + ")");
         }
     }
@@ -339,105 +360,105 @@ public class ClientController {
         owned.addAll(upper);
         owned.addAll(lower);
         int total = upper.size() + lower.size();
-        view.displayInfo(nick + " bought " + total + " building(s)");
-        view.refresh(this);
+        pendingLogs.add(nick + " bought " + total + " building(s)");
     }
 
     public synchronized void extraPickTurn(String nick) {
         this.currentPhase = Phase.RESET_TURN_ORDER_AND_PICK_EXTRA_BUILDING;
         this.currentPlayer = nick;
         if (nick.equals(myNickname)) {
-            view.refresh(this);
-            View.ExtraPickChoice choice = view.promptExtraCard();
-            final Integer id = choice.cardId;
-            final boolean isChar = choice.isCharacter;
-            sendOrError(new SafeSend() {
-                @Override public void send() throws RemoteException {
-                    virtualServer.pickExtraCard(myNickname, id, isChar);
+            pendingPrompt = new Runnable() {
+                @Override public void run() {
+                    View.ExtraPickChoice choice = view.promptExtraCard();
+                    final Integer id = choice.cardId;
+                    final boolean isChar = choice.isCharacter;
+                    sendOrError(new SafeSend() {
+                        @Override public void send() throws RemoteException {
+                            virtualServer.pickExtraCard(myNickname, id, isChar);
+                        }
+                    });
                 }
-            });
+            };
         } else {
-            view.displayInfo(nick + " has the extra pick (special building bonus)");
+            pendingLogs.add(nick + " has the extra pick (special building bonus)");
         }
     }
 
     public synchronized void extraCardPicked(String nick, Integer cardId, boolean isCharacter) {
         if (cardId == null) {
-            view.displayInfo(nick + " skipped the extra pick");
+            pendingLogs.add(nick + " skipped the extra pick");
         } else {
-            view.displayInfo(nick + " did extra pick: "
+            pendingLogs.add(nick + " did extra pick: "
                     + (isCharacter ? "character" : "building") + " id=" + cardId);
         }
-        view.refresh(this);
     }
 
     public synchronized void prestigeChanged(String nick, int newPrestige) {
-        prestige.put(nick, newPrestige);
-        view.displayInfo(nick + " prestige -> " + newPrestige);
+        Integer prev = prestige.put(nick, newPrestige);
+        // Mostriamo il log solo se il valore \u00e8 EFFETTIVAMENTE
+        // cambiato rispetto a uno noto. Saltiamo:
+        //   - prev == null   : primo broadcast (es. il bundle iniziale
+        //                       di startMatch con prestige=0/food=0).
+        //                       L'utente vedr\u00e0 i valori nel dump,
+        //                       non serve un log "X prestige -> 0".
+        //   - prev == new    : il server emette pi\u00f9 fasi di scoring
+        //                       e capita che la seconda non cambi nulla.
+        if (prev != null && prev != newPrestige) {
+            pendingLogs.add(nick + " prestige -> " + newPrestige);
+        }
     }
 
     public synchronized void foodChanged(String nick, int newFood) {
-        food.put(nick, newFood);
-        view.displayInfo(nick + " food -> " + newFood);
+        Integer prev = food.put(nick, newFood);
+        if (prev != null && prev != newFood) {
+            pendingLogs.add(nick + " food -> " + newFood);
+        }
     }
 
     public synchronized void roundEnded() {
-        view.displayInfo("Round ended");
+        pendingLogs.add("Round ended");
     }
 
     public synchronized void gameEnded(List<String> leaderboard, List<String> winners) {
         this.currentPhase = Phase.GAME_ENDED;
         this.finalLeaderboard = leaderboard;
         this.finalWinners = winners;
-        view.refresh(this);
-        view.displayInfo("Game ended. Winners: " + winners);
-        // Sveglia il main thread bloccato in awaitGameEnd() perch\u00e9
-        // possa fare la sequenza di cleanup e uscire dal JVM.
-        endLatch.countDown();
+        pendingLogs.add("Game ended. Winners: " + winners);
+        pendingGameEnded = true;
+        // NB: il countDown del latch \u00e8 spostato in commit(), in modo
+        // che il main thread non esca dall'awaitGameEnd prima che il
+        // dump finale venga mostrato.
     }
 
     public synchronized void matchPaused(String reason) {
         this.currentPhase = Phase.PAUSED_WAITING_RECONNECT;
-        view.displayInfo("Match paused: " + reason);
+        pendingLogs.add("Match paused: " + reason);
     }
 
     public synchronized void matchResumed() {
-        view.displayInfo("Match resumed.");
+        pendingLogs.add("Match resumed.");
     }
 
     public synchronized void playerDisconnected(String nick) {
-        view.displayInfo(nick + " disconnected.");
+        pendingLogs.add(nick + " disconnected.");
     }
 
     public synchronized void playerReconnected(String nick) {
-        view.displayInfo(nick + " reconnected.");
+        pendingLogs.add(nick + " reconnected.");
     }
 
     public synchronized void actionRejected(String reason) {
-        // Solo store: l'errore viene stampato dal prossimo refresh,
-        // dopo il dump dello stato e prima del prompt. Vedi
-        // {@link #consumePendingError()} e TuiView.refresh.
+        // Solo store: l'errore viene stampato dal prossimo {@link #commit()}
+        // (sezione "displayError"), dopo il dump dello stato e prima
+        // del prompt.
         this.pendingError = reason;
     }
 
     /**
-     * Letto e azzerato dalla view in fondo a {@code refresh}: se
-     * non-null, la view stampa il box d'errore subito dopo il
-     * delimitatore di chiusura del game state, cos\u00ec l'utente lo
-     * vede a ridosso del prompt.
-     */
-    public synchronized String consumePendingError() {
-        String e = this.pendingError;
-        this.pendingError = null;
-        return e;
-    }
-
-    /**
-     * Il connect del client \u00e8 stato rifiutato dal server. Mostriamo
-     * l'errore e chiudiamo la connessione: triggeriamo il latch di
-     * fine sessione cos\u00ec che il main thread esca da
-     * {@link #awaitGameEnd} e proceda al cleanup (disconnect +
-     * unexport per RMI, chiusura socket per socket).
+     * Il connect del client \u00e8 stato rifiutato dal server. Caso
+     * speciale: lo stampiamo SUBITO (senza passare da commit) e
+     * trigghiamo il latch, perch\u00e9 questo \u00e8 un terminale di
+     * sessione e nessun commit seguir\u00e0.
      */
     public synchronized void nicknameRejected(String reason) {
         view.displayError(reason);
@@ -455,6 +476,43 @@ public class ClientController {
      */
     public synchronized void boardSnapshot(Board board) {
         this.currentBoard = board;
+    }
+
+    /**
+     * Marker di fine bundle dal server. Esegue, in ordine:
+     *   1. {@code view.refresh(this)} \u2014 unico punto in cui il
+     *      client stampa il GAME STATE dump.
+     *   2. flush dei {@link #pendingLogs} accumulati dagli handler
+     *      del bundle (uno per riga, via {@code displayInfo}).
+     *   3. eventuale {@link #pendingError} via {@code displayError}.
+     *   4. eventuale {@link #pendingPrompt}: blocca su stdin
+     *      tenendo ancora il monitor del controller (semantica
+     *      identica al vecchio prompt-dentro-handler).
+     *
+     * Tutti gli handler {@code onXxx} si limitano ad aggiornare lo
+     * stato e ad accodare log/prompt; commit \u00e8 l'unico render
+     * path. Vedi {@code VirtualView#onCommit}.
+     */
+    public synchronized void commit() {
+        view.refresh(this);
+        for (String log : pendingLogs) {
+            view.displayInfo(log);
+        }
+        pendingLogs.clear();
+        String err = pendingError;
+        pendingError = null;
+        if (err != null) {
+            view.displayError(err);
+        }
+        Runnable p = pendingPrompt;
+        pendingPrompt = null;
+        if (p != null) {
+            p.run();
+        }
+        if (pendingGameEnded) {
+            pendingGameEnded = false;
+            endLatch.countDown();
+        }
     }
 
     /**
@@ -500,7 +558,9 @@ public class ClientController {
         this.expectedPlayers = s.getExpectedPlayers();
         this.finalLeaderboard = s.getLeaderboard();
         this.finalWinners = s.getWinners();
-        view.refresh(this);
+        // NB: il dump arriva dal {@link #commit()} che il server
+        // appende dopo l'onGameSnapshot. Qui ci limitiamo a sostituire
+        // lo stato.
     }
 
     // ====================================================================

@@ -192,4 +192,8 @@ public class Rmi_Client implements VirtualView {
     @Override public void ping() throws RemoteException {
         // no-op: la mera invocazione \u00e8 il segnale di liveness
     }
+
+    @Override public void onCommit() throws RemoteException {
+        controller.commit();
+    }
 }

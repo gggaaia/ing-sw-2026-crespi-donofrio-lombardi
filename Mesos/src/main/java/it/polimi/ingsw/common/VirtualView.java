@@ -160,4 +160,20 @@ public interface VirtualView extends Remote {
      * "questo client \u00e8 morto".
      */
     void ping() throws RemoteException;
+
+    /**
+     * Marca la fine di un batch logico di eventi (es. "il giocatore ha
+     * fatto il pick", "fine round", "match started") e dice al client
+     * che ora pu\u00f2 renderizzare. \u00c8 l'UNICO punto in cui il
+     * client fa un {@code view.refresh}; tutti gli {@code onXxx}
+     * precedenti nel bundle si limitano ad aggiornare il mini-stato e
+     * accodare log line.
+     *
+     * Regola server: ogni broadcast/sendToNickname che produce un
+     * cambiamento visibile all'utente deve concludersi con
+     * {@code v.onCommit()} (vedi gli helper {@code broadcastAndCommit}
+     * / {@code sendToNicknameAndCommit} in {@code ServerController}).
+     * Senza commit il client riceve i delta ma non aggiorna lo schermo.
+     */
+    void onCommit() throws RemoteException;
 }

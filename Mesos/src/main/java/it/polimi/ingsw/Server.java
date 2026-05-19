@@ -19,6 +19,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 
 /**
  * Processo server. Tre responsabilit\u00e0:
@@ -47,6 +50,19 @@ public class Server {
     private final Map<String, VirtualView> views = new HashMap<>();
     private final Set<String> rmiClients = new HashSet<>();
 
+    /**
+     * Executor a singolo thread per ogni client RMI. Garantisce che
+     * tutte le {@link #send} verso lo stesso client vengano eseguite
+     * nell'ordine in cui sono state submittate. Sostituisce il
+     * vecchio {@code new Thread(task).start()} per send, che
+     * spawnava N thread paralleli e quindi non garantiva l'ordine
+     * di consegna degli eventi al client (es. onCharacterCardsPicked
+     * poteva sorpassare onBuildingPickTurn). I client socket NON
+     * sono qui dentro: sono gi\u00e0 serializzati naturalmente
+     * (task.run() inline + writeObject sotto synchronized).
+     */
+    private final Map<String, ExecutorService> rmiSenders = new HashMap<>();
+
     // === Controller ===
 
     private final ServerController controller;
@@ -70,9 +86,20 @@ public class Server {
         views.put(nick, v);
     }
 
-    public synchronized void unregister(String nick) {
-        views.remove(nick);
-        rmiClients.remove(nick);
+    public void unregister(String nick) {
+        ExecutorService toShutdown;
+        synchronized (this) {
+            views.remove(nick);
+            rmiClients.remove(nick);
+            toShutdown = rmiSenders.remove(nick);
+        }
+        if (toShutdown != null) {
+            // shutdownNow: il client \u00e8 gi\u00e0 considerato disconnesso,
+            // gli eventi pendenti nella coda non interessano pi\u00f9 a
+            // nessuno. Fuori dal monitor per non chiamare metodi
+            // bloccanti tenendo il lock del Server.
+            toShutdown.shutdownNow();
+        }
     }
 
     /**
@@ -82,11 +109,21 @@ public class Server {
      * l'idempotenza della cascata di disconnect quando due thread di
      * send falliscono in parallelo verso lo stesso client.
      */
-    public synchronized boolean unregisterIfPresent(String nick) {
-        boolean wasPresent = views.containsKey(nick);
-        if (wasPresent) {
-            views.remove(nick);
-            rmiClients.remove(nick);
+    public boolean unregisterIfPresent(String nick) {
+        boolean wasPresent;
+        ExecutorService toShutdown;
+        synchronized (this) {
+            wasPresent = views.containsKey(nick);
+            if (wasPresent) {
+                views.remove(nick);
+                rmiClients.remove(nick);
+                toShutdown = rmiSenders.remove(nick);
+            } else {
+                toShutdown = null;
+            }
+        }
+        if (toShutdown != null) {
+            toShutdown.shutdownNow();
         }
         return wasPresent;
     }
@@ -108,26 +145,60 @@ public class Server {
 
     /**
      * Manda una task verso il client con il nickname dato.
-     * Per RMI: spawna un thread fresco (la chiamata pu\u00f2 essere lenta).
-     * Per socket: esegue inline (writeObject \u00e8 veloce).
      *
-     * NB: il monitor del Server non viene preso; il check su rmiClients
-     * \u00e8 una lettura best-effort di un HashSet — \u00e8 sicuro perch\u00e9
-     * le modifiche al set avvengono solo all'interno dei metodi
-     * register/unregister sopra (synchronized).
+     * Per RMI: la submitto sull'executor dedicato a quel client (un
+     * {@link Executors#newSingleThreadExecutor() single thread
+     * executor}). Cos\u00ec multiple {@code send} verso lo stesso
+     * client vengono eseguite in ordine FIFO sullo stesso thread,
+     * mantenendo invariato l'ordine atteso degli eventi (es.
+     * {@code onCharacterCardsPicked} prima di {@code onBuildingPickTurn},
+     * {@code onCommit} dopo gli eventi del bundle, ecc.). Diversi
+     * client RMI hanno executor diversi, quindi la consegna verso
+     * ognuno avviene in parallelo.
+     *
+     * Per socket: esegue inline ({@code task.run()}). I socket sono
+     * gi\u00e0 serializzati naturalmente: {@code Server.send} \u00e8
+     * chiamato dentro al monitor del {@code ServerController}, e la
+     * scrittura dentro {@code Socket_VirtualClient.send} \u00e8
+     * sotto {@code synchronized(output)}, quindi due send verso lo
+     * stesso socket non possono interleave.
      */
     public void send(String nick, Runnable task) {
-        boolean rmi;
-        synchronized (this) {
-            rmi = rmiClients.contains(nick);
-        }
-        if (rmi) {
-            Thread t = new Thread(task, "send-" + nick);
-            t.setDaemon(true);
-            t.start();
-        } else {
+        ExecutorService exec = rmiSenderFor(nick);
+        if (exec == null) {
+            // Socket: scrittura inline, gi\u00e0 serializzata dal
+            // chiamante (ServerController) e da synchronized(output)
+            // dentro Socket_VirtualClient.send.
             task.run();
+            return;
         }
+        try {
+            exec.execute(task);
+        } catch (RejectedExecutionException ignored) {
+            // Executor gi\u00e0 shut down (client disconnesso): la task
+            // viene scartata, e va bene cos\u00ec.
+        }
+    }
+
+    /**
+     * Restituisce l'executor dedicato a {@code nick} se \u00e8 un
+     * client RMI, creandolo al volo la prima volta. Per i client
+     * socket restituisce {@code null} (scrittura inline).
+     */
+    private synchronized ExecutorService rmiSenderFor(String nick) {
+        if (!rmiClients.contains(nick)) {
+            return null;
+        }
+        ExecutorService exec = rmiSenders.get(nick);
+        if (exec == null) {
+            exec = Executors.newSingleThreadExecutor(r -> {
+                Thread t = new Thread(r, "send-" + nick);
+                t.setDaemon(true);
+                return t;
+            });
+            rmiSenders.put(nick, exec);
+        }
+        return exec;
     }
 
     // === Heartbeat ===
