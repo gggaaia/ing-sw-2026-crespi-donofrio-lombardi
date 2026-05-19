@@ -1,78 +1,156 @@
 package it.polimi.ingsw.socket.server;
 
 import it.polimi.ingsw.common.VirtualView;
+import it.polimi.ingsw.common.dto.GameSnapshot;
 import it.polimi.ingsw.common.wire.ServerToClientMessage;
-import it.polimi.ingsw.controller.servercontroller.ServerController;
+import it.polimi.ingsw.model.card.BuildingCard;
+import it.polimi.ingsw.model.card.CharacterCard;
+import it.polimi.ingsw.model.enums.Era;
+import it.polimi.ingsw.model.enums.TotemColor;
 
 import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.rmi.RemoteException;
+import java.util.List;
+import java.util.Set;
 
 /**
- * Server-side write-only proxy that, for a single socket-connected
- * client, implements VirtualView. The four notifyXxx methods do
- * exactly what a regular VirtualView does PLUS one extra step,
- * because socket clients do not pull: the implementation reads the
- * payload from this proxy's bound ClientData buffer (which the
- * dispatcher just wrote into) and writes a ServerToClientMessage on
- * the socket carrying the payload. The receiving Socket_Client gets
- * the data on the wire (push), exactly as before this refactor.
+ * Implementazione lato server di {@link VirtualView} per i client
+ * collegati via socket. Ogni metodo: una riga, impacchetta i
+ * parametri in un {@link ServerToClientMessage} e scrive sul socket.
  *
- * The bound ClientData reference is set after the very first
- * Connect message, by Socket_ClientHandler.visitConnect, via
- * setBoundClientData(...).
- *
- * If the underlying write fails, RemoteException is thrown so the
- * dispatcher catches it and marks the client disconnected (same code
- * path as for an RMI failure).
+ * Dalla prospettiva del {@link it.polimi.ingsw.controller.server.ServerController},
+ * questa classe \u00e8 identica a uno stub RMI di {@link VirtualView}:
+ * lui chiama {@code view.onColorPicked(...)}, qui dentro il body
+ * impacchetta e manda.
  */
 public class Socket_VirtualClient implements VirtualView {
 
     private final ObjectOutputStream output;
-    private ServerController.ClientData boundData;
 
     public Socket_VirtualClient(ObjectOutputStream output) {
         this.output = output;
     }
 
-    /**
-     * Binds this proxy to its server-side ClientData slot. Called by
-     * Socket_ClientHandler.visitConnect once the slot has been
-     * registered. The proxy reads from boundData's buffers when
-     * notifyXxx is called.
-     */
-    public void setBoundClientData(ServerController.ClientData boundData) {
-        this.boundData = boundData;
+    // Ogni metodo wrappa i parametri in un ServerToClientMessage e li scrive sul socket.
+
+    @Override public void onPlayerJoined(String nick) throws RemoteException {
+        send(new ServerToClientMessage.PlayerJoined(nick));
     }
 
-    @Override
-    public void notifyStateChanged() throws RemoteException {
-        send(new ServerToClientMessage.GameState(boundData.getLastState()));
+    @Override public void onAwaitPlayerCount(String firstPlayerNick) throws RemoteException {
+        send(new ServerToClientMessage.AwaitPlayerCount(firstPlayerNick));
     }
 
-    @Override
-    public void notifyActionResultAvailable() throws RemoteException {
-        send(new ServerToClientMessage.ActionResult(boundData.getLastActionResult()));
+    @Override public void onPlayerCountSet(int count) throws RemoteException {
+        send(new ServerToClientMessage.PlayerCountSet(count));
     }
 
-    @Override
-    public void notifyInfoAvailable() throws RemoteException {
-        send(new ServerToClientMessage.Info(boundData.getLastInfo()));
+    @Override public void onAwaitMorePlayers(int joined, int total) throws RemoteException {
+        send(new ServerToClientMessage.AwaitMorePlayers(joined, total));
     }
 
-    @Override
-    public void notifyErrorAvailable() throws RemoteException {
-        send(new ServerToClientMessage.Error(boundData.getLastError()));
+    @Override public void onColorTurn(String nick, Set<TotemColor> available) throws RemoteException {
+        send(new ServerToClientMessage.ColorTurn(nick, available));
     }
 
-    @Override
-    public void ping() throws RemoteException {
-        // Socket transport detects client disconnects via the
-        // Socket_ClientHandler read loop (EOF / IOException on
-        // input.readObject), so an extra wire ping is redundant. The
-        // heartbeat in Server.java still calls this method on every
-        // Socket_VirtualClient for uniformity with RMI; the no-op is
-        // safe.
+    @Override public void onColorPicked(String nick, TotemColor color) throws RemoteException {
+        send(new ServerToClientMessage.ColorPicked(nick, color));
+    }
+
+    @Override public void onMatchStarted(List<String> playerOrder, Era startingEra) throws RemoteException {
+        send(new ServerToClientMessage.MatchStarted(playerOrder, startingEra));
+    }
+
+    @Override public void onEraChanged(Era newEra) throws RemoteException {
+        send(new ServerToClientMessage.EraChanged(newEra));
+    }
+
+    @Override public void onRoundStarted(int round) throws RemoteException {
+        send(new ServerToClientMessage.RoundStarted(round));
+    }
+
+    @Override public void onOfferingTileTurn(String nick, int trackSize) throws RemoteException {
+        send(new ServerToClientMessage.OfferingTileTurn(nick, trackSize));
+    }
+
+    @Override public void onOfferingTilePicked(String nick, int tileIndex) throws RemoteException {
+        send(new ServerToClientMessage.OfferingTilePicked(nick, tileIndex));
+    }
+
+    @Override public void onCharacterPickTurn(String nick, int upperBudget, int lowerBudget) throws RemoteException {
+        send(new ServerToClientMessage.CharacterPickTurn(nick, upperBudget, lowerBudget));
+    }
+
+    @Override public void onCharacterCardsPicked(String nick,
+                                                 List<CharacterCard> upper,
+                                                 List<CharacterCard> lower) throws RemoteException {
+        send(new ServerToClientMessage.CharacterCardsPicked(nick, upper, lower));
+    }
+
+    @Override public void onBuildingPickTurn(String nick, int upperRemaining, int lowerRemaining) throws RemoteException {
+        send(new ServerToClientMessage.BuildingPickTurn(nick, upperRemaining, lowerRemaining));
+    }
+
+    @Override public void onBuildingCardsBought(String nick,
+                                                List<BuildingCard> upper,
+                                                List<BuildingCard> lower) throws RemoteException {
+        send(new ServerToClientMessage.BuildingCardsBought(nick, upper, lower));
+    }
+
+    @Override public void onExtraPickTurn(String nick) throws RemoteException {
+        send(new ServerToClientMessage.ExtraPickTurn(nick));
+    }
+
+    @Override public void onExtraCardPicked(String nick, Integer cardId, boolean isCharacter) throws RemoteException {
+        send(new ServerToClientMessage.ExtraCardPicked(nick, cardId, isCharacter));
+    }
+
+    @Override public void onPrestigeChanged(String nick, int newPrestige) throws RemoteException {
+        send(new ServerToClientMessage.PrestigeChanged(nick, newPrestige));
+    }
+
+    @Override public void onFoodChanged(String nick, int newFood) throws RemoteException {
+        send(new ServerToClientMessage.FoodChanged(nick, newFood));
+    }
+
+    @Override public void onRoundEnded() throws RemoteException {
+        send(new ServerToClientMessage.RoundEnded());
+    }
+
+    @Override public void onGameEnded(List<String> leaderboard, List<String> winners) throws RemoteException {
+        send(new ServerToClientMessage.GameEnded(leaderboard, winners));
+    }
+
+    @Override public void onMatchPaused(String reason) throws RemoteException {
+        send(new ServerToClientMessage.MatchPaused(reason));
+    }
+
+    @Override public void onMatchResumed() throws RemoteException {
+        send(new ServerToClientMessage.MatchResumed());
+    }
+
+    @Override public void onPlayerDisconnected(String nick) throws RemoteException {
+        send(new ServerToClientMessage.PlayerDisconnected(nick));
+    }
+
+    @Override public void onPlayerReconnected(String nick) throws RemoteException {
+        send(new ServerToClientMessage.PlayerReconnected(nick));
+    }
+
+    @Override public void onActionRejected(String reason) throws RemoteException {
+        send(new ServerToClientMessage.ActionRejected(reason));
+    }
+
+    @Override public void onGameSnapshot(GameSnapshot snapshot) throws RemoteException {
+        send(new ServerToClientMessage.GameSnapshotMsg(snapshot));
+    }
+
+    @Override public void ping() throws RemoteException {
+        // Per i socket l'heartbeat \u00e8 una writeObject che pu\u00f2 fallire
+        // se il client \u00e8 morto; un messaggio nuovo non serve perch\u00e9
+        // la disconnessione viene catturata dal reader nel
+        // Socket_ClientHandler. Lasciamo il body vuoto.
     }
 
     private void send(ServerToClientMessage msg) throws RemoteException {
@@ -80,12 +158,10 @@ public class Socket_VirtualClient implements VirtualView {
             synchronized (output) {
                 output.writeObject(msg);
                 output.flush();
-                // Clears the serialization cache so a subsequent push of a
-                // mutated DTO is sent in full instead of as a back-reference.
                 output.reset();
             }
         } catch (IOException e) {
-            throw new RemoteException("Socket push failed", e);
+            throw new RemoteException("socket send failed", e);
         }
     }
 }

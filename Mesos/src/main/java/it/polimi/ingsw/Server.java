@@ -1,10 +1,7 @@
 package it.polimi.ingsw;
 
-import it.polimi.ingsw.common.VirtualServer;
 import it.polimi.ingsw.common.VirtualView;
-import it.polimi.ingsw.controller.servercontroller.ServerController;
-import it.polimi.ingsw.controller.servercontroller.notification.Notification;
-import it.polimi.ingsw.controller.servercontroller.notification.TargetVisitor;
+import it.polimi.ingsw.controller.server.ServerController;
 import it.polimi.ingsw.rmi.server.Rmi_Server;
 import it.polimi.ingsw.socket.server.Socket_Server;
 
@@ -14,278 +11,190 @@ import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Set;
+import java.util.Timer;
+import java.util.TimerTask;
 
 /**
- * Process entry point of the server side. Two responsibilities, kept
- * strictly separate:
+ * Processo server. Tre responsabilit\u00e0:
  *
- *   - Bootstrap: build the single ServerController, start the RMI
- *     listener and the socket listener on the same controller.
+ *   1. Registry dei client connessi: una {@code Map<String, VirtualView>}
+ *      pi\u00f9 un {@code Set<String>} per i client RMI (gli unici per cui
+ *      facciamo dispatch asincrono).
  *
- *   - Registry of clients + dispatch of notifications. The registry
- *     is a ConcurrentHashMap keyed by nickname (the trust-based
- *     identity, see VirtualServer's javadoc). Concurrent reads from
- *     the RMI worker threads handling getState/getLastXxx are safe
- *     against the dispatcher's iteration without external locking.
+ *   2. Helper di dispatch verso un singolo client: {@link #send}.
+ *      Per i client RMI spawna un thread; per i client socket fa la
+ *      chiamata inline (writeObject veloce). Il chiamante \u00e8
+ *      sempre il {@link ServerController}, da dentro i suoi metodi
+ *      synchronized.
  *
- * Dispatching uses a small visitor:
- *   - notification.getTarget().accept(visitor) routes polymorphically
- *     to visitSender / visitBroadcast / visitToNickname.
- *   - notification.deliver(recipient) on each picked recipient stores
- *     the payload in the recipient's per-slot buffer (so RMI clients
- *     can pull it via VirtualServer.getXxx) and calls the matching
- *     no-payload notifyXxx method on the view (RMI: triggers the
- *     pull; socket: Socket_VirtualClient writes the wire message).
+ *   3. Bootstrap: avvia il listener RMI, il listener socket, e il
+ *      timer di heartbeat (ping periodico di tutti i client per
+ *      detectare disconnessioni silenziose).
  *
- * No instanceof, no switch, no if/else for type discrimination.
+ * Il {@link ServerController} \u00e8 il "cervello"; questo Server \u00e8
+ * solo infrastruttura di rete.
  */
 public class Server {
 
-    private final ServerController server_controller = new ServerController();
+    // === Registry condiviso ===
+
+    private final Map<String, VirtualView> views = new HashMap<>();
+    private final Set<String> rmiClients = new HashSet<>();
+
+    // === Controller ===
+
+    private final ServerController controller;
 
     public Server() {
-        // Wire the controller so its lone-player timer thread can call
-        // back into this dispatcher.
-        server_controller.setServer(this);
+        this.controller = new ServerController(this);
+    }
+
+    public ServerController getController() {
+        return controller;
+    }
+
+    // === Registry API (chiamata dagli adapter) ===
+
+    public synchronized void registerRmi(String nick, VirtualView v) {
+        views.put(nick, v);
+        rmiClients.add(nick);
+    }
+
+    public synchronized void registerSocket(String nick, VirtualView v) {
+        views.put(nick, v);
+    }
+
+    public synchronized void unregister(String nick) {
+        views.remove(nick);
+        rmiClients.remove(nick);
     }
 
     /**
-     * The only registry of clients in the process. Adapters call
-     * register(nickname, view) when a client opens a connection (and
-     * sends its first 'connect' call), and unregister(nickname) when
-     * the connection terminates. The dispatcher iterates
-     * registry.values() to deliver Broadcast notifications and looks
-     * up by key to deliver ToNickname notifications and to serve RMI
-     * pull-getters in O(1).
+     * Versione atomica di {@code unregister} che restituisce {@code true}
+     * solo se il client era effettivamente registrato (e ora non lo \u00e8
+     * pi\u00f9). Usata dal {@code ServerController} per garantire
+     * l'idempotenza della cascata di disconnect quando due thread di
+     * send falliscono in parallelo verso lo stesso client.
      */
-    private final Map<String, ServerController.ClientData> registry = new ConcurrentHashMap<>();
-
-    /**
-     * Builds a fresh ClientData for the given nickname / view and
-     * adds it to the registry. If a slot already exists for that
-     * nickname the existing slot is returned untouched, so the caller
-     * (the adapter, or the controller via the adapter) can decide
-     * whether to reject the call or rebind the view onto the existing
-     * slot for a reconnection.
-     */
-    public ServerController.ClientData register(String nickname, VirtualView view) {
-        ServerController.ClientData fresh = new ServerController.ClientData(nickname, view);
-        ServerController.ClientData existing = registry.putIfAbsent(nickname, fresh);
-        return existing != null ? existing : fresh;
+    public synchronized boolean unregisterIfPresent(String nick) {
+        boolean wasPresent = views.containsKey(nick);
+        if (wasPresent) {
+            views.remove(nick);
+            rmiClients.remove(nick);
+        }
+        return wasPresent;
     }
 
-    /**
-     * Removes the entry associated with the given nickname. Does
-     * nothing if not present.
-     */
-    public void unregister(String nickname) {
-        registry.remove(nickname);
+    public synchronized VirtualView getView(String nick) {
+        return views.get(nick);
     }
 
-    /**
-     * O(1) lookup of the ClientData associated with the given
-     * nickname. Used by the adapters to convert "the nickname the
-     * client passed in this method call" into the slot they hand to
-     * ServerController, and by the RMI getter methods on Rmi_Server
-     * to read the per-slot payload buffers.
-     */
-    public ServerController.ClientData lookup(String nickname) {
-        return registry.get(nickname);
+    public synchronized boolean isConnected(String nick) {
+        return views.containsKey(nick);
     }
 
-    public ServerController getServer_controller() {
-        return server_controller;
+    /** Snapshot della mappa views (copia difensiva). */
+    public synchronized Map<String, VirtualView> snapshotViews() {
+        return new HashMap<>(views);
     }
 
-    /**
-     * Walks each notification in the list and delivers it to the
-     * recipients selected by its target (Sender, Broadcast,
-     * ToNickname).
-     */
-    public void dispatch(ServerController.ClientData sender, List<Notification> notifications) {
-        Dispatcher dispatcher = new Dispatcher(sender);
-        for (Notification n : notifications) {
-            dispatcher.dispatch(n);
-        }
-    }
+    // === Dispatch helper ===
 
     /**
-     * Inner dispatcher. Implements TargetVisitor so target
-     * discrimination is double-dispatch.
-     */
-    private final class Dispatcher implements TargetVisitor {
-
-        private final ServerController.ClientData sender;
-        private Notification currentNotification;
-
-        Dispatcher(ServerController.ClientData sender) {
-            this.sender = sender;
-        }
-
-        void dispatch(Notification notification) {
-            this.currentNotification = notification;
-            notification.getTarget().accept(this);
-        }
-
-        @Override
-        public void visitSender() {
-            deliverTo(sender, currentNotification);
-        }
-
-        @Override
-        public void visitBroadcast() {
-            for (ServerController.ClientData client : registry.values()) {
-                deliverTo(client, currentNotification);
-            }
-        }
-
-        @Override
-        public void visitBroadcastExceptSender() {
-            for (ServerController.ClientData client : registry.values()) {
-                // Skip the sender by reference: registry stores the same
-                // ClientData instance Server.register returned to the adapter,
-                // so a == comparison is safe and exact.
-                if (client != sender) {
-                    deliverTo(client, currentNotification);
-                }
-            }
-        }
-
-        @Override
-        public void visitToNickname(String nickname) {
-            ServerController.ClientData target = registry.get(nickname);
-            // Null check, not type discrimination: the requested
-            // nickname may simply not be in the registry.
-            if (target != null) {
-                deliverTo(target, currentNotification);
-            }
-        }
-
-        private void deliverTo(ServerController.ClientData recipient, Notification notification) {
-            try {
-                notification.deliver(recipient);
-            } catch (RemoteException e) {
-                handleDeliveryFailure(recipient, e);
-            }
-        }
-    }
-
-    /**
-     * Triggered both by Dispatcher.deliverTo (when a notification push
-     * fails) and by the heartbeat timer (when ping fails). Marks the
-     * slot disconnected, forwards to the controller's
-     * handleClientDisconnected, and dispatches whatever notifications
-     * the controller produces in response (e.g. the
-     * "match paused; lone player timer started" broadcast that
-     * PickOfferingTileStrategy returns when the connected count drops
-     * to 1).
+     * Manda una task verso il client con il nickname dato.
+     * Per RMI: spawna un thread fresco (la chiamata pu\u00f2 essere lenta).
+     * Per socket: esegue inline (writeObject \u00e8 veloce).
      *
-     * Recursively safe: if the cascade tries to push to ANOTHER
-     * disconnected client, that push fails and re-enters here, which
-     * just marks the second slot disconnected. The controller's
-     * handleClientDisconnected is synchronized on the controller
-     * monitor and Java's monitor reentrancy lets the same thread
-     * re-enter without deadlock.
+     * NB: il monitor del Server non viene preso; il check su rmiClients
+     * \u00e8 una lettura best-effort di un HashSet — \u00e8 sicuro perch\u00e9
+     * le modifiche al set avvengono solo all'interno dei metodi
+     * register/unregister sopra (synchronized).
      */
-    private void handleDeliveryFailure(ServerController.ClientData recipient, Exception e) {
-        if (!recipient.isConnected()) {
-            // Already marked disconnected on a previous failure; do
-            // not run the cascade twice.
-            return;
+    public void send(String nick, Runnable task) {
+        boolean rmi;
+        synchronized (this) {
+            rmi = rmiClients.contains(nick);
         }
-        recipient.markDisconnected();
-        System.err.println("Delivery failed to "
-                + recipient.getNickname()
-                + "; entry marked disconnected: "
-                + e.getMessage());
-        List<Notification> followUp = server_controller.handleClientDisconnected(recipient);
-        dispatch(recipient, followUp);
+        if (rmi) {
+            Thread t = new Thread(task, "send-" + nick);
+            t.setDaemon(true);
+            t.start();
+        } else {
+            task.run();
+        }
     }
 
-    public void start(int rmiPort, int socketPort) throws Exception {
-        startRmiServer(rmiPort);
-        startSocketServer(socketPort);
-        startHeartbeat();
-
-        System.out.println("Unified server started:");
-        System.out.println("  RMI    port " + rmiPort);
-        System.out.println("  Socket port " + socketPort);
-        System.out.println("  Heartbeat interval " + HEARTBEAT_INTERVAL_MS + " ms");
-    }
+    // === Heartbeat ===
 
     private static final long HEARTBEAT_INTERVAL_MS = 5_000L;
-    private java.util.Timer heartbeatTimer;
+    private Timer heartbeatTimer;
 
-    /**
-     * Schedules a fixed-rate task that calls ping() on every
-     * connected VirtualView. Failure → handleDeliveryFailure runs
-     * the same cascade as a failed notification push: mark the slot
-     * disconnected, forward to ServerController.handleClientDisconnected,
-     * and dispatch the resulting notifications.
-     *
-     * This is the ONLY way the server detects RMI clients that
-     * disappeared silently (e.g. process exit) when no other push is
-     * in flight to fail. Without it, a player who disconnects on
-     * their own turn during PICK_OFFERING_TILE would keep the
-     * controller waiting forever — no pause, no lone-player timer.
-     */
     private void startHeartbeat() {
-        heartbeatTimer = new java.util.Timer("server-heartbeat", true);
-        heartbeatTimer.scheduleAtFixedRate(new java.util.TimerTask() {
-            @Override
-            public void run() {
+        heartbeatTimer = new Timer("server-heartbeat", true);
+        heartbeatTimer.scheduleAtFixedRate(new TimerTask() {
+            @Override public void run() {
                 heartbeat();
             }
         }, HEARTBEAT_INTERVAL_MS, HEARTBEAT_INTERVAL_MS);
     }
 
     private void heartbeat() {
-        // Take a snapshot of currently-connected slots and ping each
-        // outside any lock. ConcurrentHashMap iteration is safe; we
-        // copy to a List to avoid concurrent modification if the
-        // cascade following a failure removes/replaces entries.
-        java.util.List<ServerController.ClientData> snapshot =
-                new java.util.ArrayList<>(registry.values());
-        for (ServerController.ClientData slot : snapshot) {
-            if (!slot.isConnected()) {
-                continue;
-            }
-            try {
-                slot.getView().ping();
-            } catch (RemoteException e) {
-                handleDeliveryFailure(slot, e);
-            } catch (RuntimeException e) {
-                // Defensive: ping() implementations are no-ops, but a
-                // bug should not kill the whole heartbeat thread.
-                System.err.println("Heartbeat ping unexpectedly threw: " + e.getMessage());
-            }
+        List<Map.Entry<String, VirtualView>> snapshot;
+        synchronized (this) {
+            snapshot = new ArrayList<>(views.entrySet());
         }
+        for (final Map.Entry<String, VirtualView> e : snapshot) {
+            final String nick = e.getKey();
+            final VirtualView v = e.getValue();
+            send(nick, new Runnable() {
+                @Override public void run() {
+                    try {
+                        v.ping();
+                    } catch (RemoteException ex) {
+                        controller.handleDeliveryFailure(nick);
+                    } catch (RuntimeException ex) {
+                        System.err.println("Heartbeat ping unexpectedly threw: " + ex.getMessage());
+                    }
+                }
+            });
+        }
+    }
+
+    // === Bootstrap ===
+
+    public void start(int rmiPort, int socketPort) throws Exception {
+        startRmiServer(rmiPort);
+        startSocketServer(socketPort);
+        startHeartbeat();
+        System.out.println("Server started: RMI port " + rmiPort + ", socket port " + socketPort);
     }
 
     private void startRmiServer(int port) throws RemoteException {
         Rmi_Server rmiServer = new Rmi_Server(this);
-        VirtualServer stub = (VirtualServer) UnicastRemoteObject.exportObject(rmiServer, 0);
+        Object stub = UnicastRemoteObject.exportObject(rmiServer, 0);
         Registry rmiRegistry = LocateRegistry.createRegistry(port);
-        rmiRegistry.rebind("AdderServer", stub);
+        rmiRegistry.rebind("AdderServer", (it.polimi.ingsw.common.VirtualServer) stub);
     }
 
     private void startSocketServer(int port) throws IOException {
         ServerSocket listenSocket = new ServerSocket(port);
         final Socket_Server socketServer = new Socket_Server(listenSocket, this);
-
         Thread acceptorThread = new Thread(new Runnable() {
-            @Override
-            public void run() {
+            @Override public void run() {
                 try {
                     socketServer.run();
                 } catch (IOException e) {
                     System.err.println("Socket server error: " + e.getMessage());
                 }
             }
-        });
+        }, "socket-acceptor");
+        acceptorThread.setDaemon(true);
         acceptorThread.start();
     }
 

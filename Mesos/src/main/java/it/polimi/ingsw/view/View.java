@@ -1,75 +1,88 @@
 package it.polimi.ingsw.view;
 
-import it.polimi.ingsw.common.dto.ActionResultDto;
-import it.polimi.ingsw.common.dto.GameStateDto;
+import it.polimi.ingsw.controller.client.ClientController;
+import it.polimi.ingsw.model.enums.TotemColor;
+
+import java.util.List;
+import java.util.Set;
 
 /**
- * The interface the ClientController uses to talk to the user. Two
- * groups of methods:
+ * Interfaccia che il {@code ClientController} usa per parlare con
+ * l'utente. Due gruppi di metodi:
  *
- *   - display methods (server-pushed updates the user just needs to
- *     see): displayConnected, displayInfo, displayError,
- *     displayActionResult, displayState.
+ *   - display* / refresh: il controller dice alla view "qui c'\u00e8
+ *     un evento, mostra qualcosa". Non bloccano.
  *
- *   - prompt methods (block waiting for user input): promptNickname.
- *     More prompt methods will be added in later steps when the
- *     controller starts asking for colors, offering tile choices,
- *     card picks, etc.
+ *   - prompt*: il controller chiede all'utente di scegliere. BLOCCANO
+ *     finch\u00e9 l'utente non sceglie. Vengono chiamati solo nei
+ *     metodi *Turn del ClientController quando il turno \u00e8 quello
+ *     dell'utente locale.
  *
- * Two implementations: TuiView (text-only, uses Scanner / System.out)
- * and GuiView (JavaFX; bodies in step 10).
+ * Implementazioni: {@code TuiView} (testo) e {@code GuiView} (JavaFX).
  */
 public interface View {
 
-    /**
-     * Called by Client.startXxxClient right after the connection has
-     * been opened, before the controller takes over.
-     */
+    /** Chiamato all'apertura della connessione. */
     void displayConnected(String host, int port);
 
-    /**
-     * Blocks asking the user for a nickname. Called once per session,
-     * at the very beginning of Rmi_Client.run / Socket_Client.run,
-     * before the first connect call.
-     */
-    String promptNickname();
-
-    /**
-     * Displays a free-text info message ("X has joined", "match
-     * resumed", ...).
-     */
+    /** Mostra un messaggio informativo generico. */
     void displayInfo(String message);
 
-    /**
-     * Displays a free-text error message.
-     */
+    /** Mostra un messaggio di errore. */
     void displayError(String message);
 
     /**
-     * Displays the typed outcome of a player input: the action label,
-     * the success flag, and the message.
+     * Re-renderizza lo schermo dal mini-stato corrente del controller.
+     * Chiamato dopo ogni aggiornamento del mini-stato.
      */
-    void displayActionResult(ActionResultDto result);
+    void refresh(ClientController state);
+
+    /** Prompt iniziale del nickname. Blocca. */
+    String promptNickname();
+
+    /** Prompt del numero di giocatori (2-5). Blocca. */
+    int promptPlayerCount();
+
+    /** Prompt del colore. Blocca. */
+    TotemColor promptColor(Set<TotemColor> available);
+
+    /** Prompt dell'offering tile (indice 0..trackSize-1). Blocca. */
+    int promptOfferingTile(int trackSize);
+
+    /** Prompt degli id delle carte personaggio della upper row. Blocca. */
+    List<Integer> promptCharacterUpperIds(int budget);
+
+    /** Prompt degli id delle carte personaggio della lower row. Blocca. */
+    List<Integer> promptCharacterLowerIds(int budget);
+
+    /** Prompt degli id degli edifici della upper row. Blocca. */
+    List<Integer> promptBuildingUpperIds(int remaining);
+
+    /** Prompt degli id degli edifici della lower row. Blocca. */
+    List<Integer> promptBuildingLowerIds(int remaining);
+
+    /** Prompt della pesca extra: skip, una carta personaggio o una edificio. Blocca. */
+    ExtraPickChoice promptExtraCard();
 
     /**
-     * Displays the current game state. The TuiView implementation
-     * just prints a textual summary; GuiView re-renders the JavaFX
-     * scene.
+     * Risultato del prompt extra-pick. Tre forme: skip, character con
+     * id, building con id. Per evitare di esporre tipi complessi,
+     * usiamo un piccolo record-like.
      */
-    void displayState(GameStateDto state);
+    final class ExtraPickChoice {
+        public final Integer cardId;
+        public final boolean isCharacter;
 
-    /**
-     * Blocks asking the user for an integer with the given prompt.
-     * Re-prompts if the input is not a valid number. Used by the
-     * ClientController's interactive input loop for player count,
-     * tile index, etc.
-     */
-    int promptInt(String prompt);
+        /** Skip: {@code cardId == null}. */
+        public ExtraPickChoice() {
+            this.cardId = null;
+            this.isCharacter = true;
+        }
 
-    /**
-     * Blocks asking the user for a free-text line with the given
-     * prompt. Used by the ClientController for color names, card-id
-     * lists, extra-pick choices.
-     */
-    String promptLine(String prompt);
+        /** Pesca una carta con dato id. */
+        public ExtraPickChoice(Integer cardId, boolean isCharacter) {
+            this.cardId = cardId;
+            this.isCharacter = isCharacter;
+        }
+    }
 }

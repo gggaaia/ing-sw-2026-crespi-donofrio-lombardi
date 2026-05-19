@@ -2,8 +2,7 @@ package it.polimi.ingsw.socket.server;
 
 import it.polimi.ingsw.Server;
 import it.polimi.ingsw.common.wire.ClientToServerMessage;
-import it.polimi.ingsw.controller.servercontroller.ServerController;
-import it.polimi.ingsw.controller.servercontroller.notification.Notification;
+import it.polimi.ingsw.controller.server.ServerController;
 import it.polimi.ingsw.model.enums.TotemColor;
 
 import java.io.EOFException;
@@ -12,35 +11,28 @@ import java.io.ObjectInputStream;
 import java.util.List;
 
 /**
- * Per-connection wire-message reader on the server side. Lives in its
- * own thread, reads serialized ClientToServerMessage instances from
- * the input stream, and discriminates among them via the visitor
- * pattern (msg.accept(this) routes to the right visitXxx).
+ * Lato server, una istanza per ogni connessione socket. Legge in loop
+ * {@link ClientToServerMessage} dallo stream e li dispatcha al
+ * {@link ServerController} tramite il visitor pattern.
  *
- * Identity model: the handler is bound to one socket connection; the
- * very first message must be ClientToServerMessage.Connect, which
- * carries the client's nickname. The handler stores it in
- * boundNickname and uses it to look up the ServerController.ClientData
- * for every subsequent message. The wire never carries the nickname
- * again after Connect (architecture section 2.6).
- *
- * On any read error or EOF (graceful disconnect), the handler exits
- * the loop and calls handleClientDisconnected on the controller from
- * the finally block.
+ * I corpi dei metodi visit* sono identici a quelli di {@code Rmi_Server}:
+ * registrazione + chiamata diretta al controller.
  */
 public class Socket_ClientHandler implements ClientToServerMessage.Visitor {
 
     private final Server server;
+    private final ServerController controller;
     private final ObjectInputStream input;
-    private final Socket_VirtualClient virtualClient;
+    private final Socket_VirtualClient virtualView;
     private String boundNickname;
 
     public Socket_ClientHandler(Server server,
                                 ObjectInputStream input,
-                                Socket_VirtualClient virtualClient) {
+                                Socket_VirtualClient virtualView) {
         this.server = server;
+        this.controller = server.getController();
         this.input = input;
-        this.virtualClient = virtualClient;
+        this.virtualView = virtualView;
     }
 
     public void runVirtualServer() {
@@ -50,14 +42,11 @@ public class Socket_ClientHandler implements ClientToServerMessage.Visitor {
                 msg.accept(this);
             }
         } catch (EOFException eof) {
-            // Client disconnected cleanly; nothing to log, fall through to
-            // the finally block which signals the controller.
+            // disconnect pulito; gestito nel finally
         } catch (IOException io) {
-            System.err.println("Socket read error for "
-                    + boundNickname + ": " + io.getMessage());
+            System.err.println("Socket read error for " + boundNickname + ": " + io.getMessage());
         } catch (ClassNotFoundException | ClassCastException malformed) {
-            System.err.println("Malformed wire message for "
-                    + boundNickname + ": " + malformed.getMessage());
+            System.err.println("Malformed wire message for " + boundNickname + ": " + malformed.getMessage());
         } finally {
             handleDisconnect();
         }
@@ -65,69 +54,49 @@ public class Socket_ClientHandler implements ClientToServerMessage.Visitor {
 
     @Override
     public void visitConnect(String nickname) {
-        ServerController.ClientData slot = server.register(nickname, virtualClient);
-        slot.setView(virtualClient);
-        slot.markConnected();
-        // Bind the slot to the virtualClient so its notifyXxx methods
-        // can read from slot.getLastXxx() to assemble the wire message.
-        virtualClient.setBoundClientData(slot);
         this.boundNickname = nickname;
-        List<Notification> notifications = server.getServer_controller().handleConnect(slot);
-        server.dispatch(slot, notifications);
+        server.registerSocket(nickname, virtualView);
+        controller.connect(nickname, virtualView);
     }
 
     @Override
-    public void visitSetPlayerCount(int count) {
-        ServerController.ClientData slot = server.lookup(boundNickname);
-        List<Notification> notifications = server.getServer_controller().handleSetPlayerCount(slot, count);
-        server.dispatch(slot, notifications);
+    public void visitDisconnect(String nickname) {
+        controller.disconnect(nickname);
     }
 
     @Override
-    public void visitPickColor(TotemColor color) {
-        ServerController.ClientData slot = server.lookup(boundNickname);
-        List<Notification> notifications = server.getServer_controller().handlePickColor(slot, color);
-        server.dispatch(slot, notifications);
+    public void visitSetPlayerCount(String nickname, int count) {
+        controller.setPlayerCount(nickname, count);
     }
 
     @Override
-    public void visitPickOfferingTile(int tileIndex) {
-        ServerController.ClientData slot = server.lookup(boundNickname);
-        List<Notification> notifications = server.getServer_controller().handlePickOfferingTile(slot, tileIndex);
-        server.dispatch(slot, notifications);
+    public void visitPickColor(String nickname, TotemColor color) {
+        controller.pickColor(nickname, color);
     }
 
     @Override
-    public void visitPickCharacterCards(List<Integer> upperRowIds, List<Integer> lowerRowIds) {
-        ServerController.ClientData slot = server.lookup(boundNickname);
-        List<Notification> notifications = server.getServer_controller()
-                .handlePickCharacterCards(slot, upperRowIds, lowerRowIds);
-        server.dispatch(slot, notifications);
+    public void visitPickOfferingTile(String nickname, int tileIndex) {
+        controller.pickOfferingTile(nickname, tileIndex);
     }
 
     @Override
-    public void visitPickBuildingCards(List<Integer> upperRowIds, List<Integer> lowerRowIds) {
-        ServerController.ClientData slot = server.lookup(boundNickname);
-        List<Notification> notifications = server.getServer_controller()
-                .handlePickBuildingCards(slot, upperRowIds, lowerRowIds);
-        server.dispatch(slot, notifications);
+    public void visitPickCharacterCards(String nickname, List<Integer> upper, List<Integer> lower) {
+        controller.pickCharacterCards(nickname, upper, lower);
     }
 
     @Override
-    public void visitPickExtraCard(Integer cardId, boolean isCharacter) {
-        ServerController.ClientData slot = server.lookup(boundNickname);
-        List<Notification> notifications = server.getServer_controller()
-                .handlePickExtraCard(slot, cardId, isCharacter);
-        server.dispatch(slot, notifications);
+    public void visitPickBuildingCards(String nickname, List<Integer> upper, List<Integer> lower) {
+        controller.pickBuildingCards(nickname, upper, lower);
+    }
+
+    @Override
+    public void visitPickExtraCard(String nickname, Integer cardId, boolean isCharacter) {
+        controller.pickExtraCard(nickname, cardId, isCharacter);
     }
 
     private void handleDisconnect() {
-        // boundNickname may be null if the client connection died before
-        // sending any message: server.lookup(null) returns null, the
-        // controller's stub returns an empty list, and dispatch with a
-        // null sender + empty list does nothing. No null check needed.
-        ServerController.ClientData slot = server.lookup(boundNickname);
-        List<Notification> notifications = server.getServer_controller().handleClientDisconnected(slot);
-        server.dispatch(slot, notifications);
+        if (boundNickname != null) {
+            controller.disconnect(boundNickname);
+        }
     }
 }

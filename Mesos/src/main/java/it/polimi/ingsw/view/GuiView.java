@@ -1,55 +1,81 @@
 package it.polimi.ingsw.view;
 
-import it.polimi.ingsw.common.dto.ActionResultDto;
-import it.polimi.ingsw.common.dto.GameStateDto;
+import it.polimi.ingsw.controller.client.ClientController;
+import it.polimi.ingsw.model.enums.TotemColor;
+
+import java.util.List;
+import java.util.Set;
 
 /**
- * JavaFX-based View. Bodies are stubs until step 10. For now the
- * methods either no-op (display) or throw (prompt) so picking "gui"
- * at startup compiles but is clearly not usable.
+ * View JavaFX. Implementazione non ancora scritta: i metodi
+ * {@code display*} sono no-op e i {@code prompt*} tirano una
+ * {@link UnsupportedOperationException}, cos\u00ec scegliere "gui"
+ * all'avvio compila ma fallisce subito a runtime in modo chiaro.
  */
 public class GuiView implements View {
-    public GuiView() {
-        super();
-    }
 
     @Override
     public void displayConnected(String host, int port) {
-        // step 10: open the main JavaFX window with the connection banner
-    }
-
-    @Override
-    public String promptNickname() {
-        throw new UnsupportedOperationException("GuiView.promptNickname: see step 10");
+        // not yet implemented
     }
 
     @Override
     public void displayInfo(String message) {
-        // step 10
+        // not yet implemented
     }
 
     @Override
     public void displayError(String message) {
-        // step 10
+        // not yet implemented
     }
 
     @Override
-    public void displayActionResult(ActionResultDto result) {
-        // step 10
+    public void refresh(ClientController state) {
+        // not yet implemented
     }
 
     @Override
-    public void displayState(GameStateDto state) {
-        // step 10
+    public String promptNickname() {
+        throw new UnsupportedOperationException("GuiView.promptNickname not implemented");
     }
 
     @Override
-    public int promptInt(String prompt) {
-        throw new UnsupportedOperationException("GuiView.promptInt: see step 10 GUI work");
+    public int promptPlayerCount() {
+        throw new UnsupportedOperationException("GuiView.promptPlayerCount not implemented");
     }
 
     @Override
-    public String promptLine(String prompt) {
-        throw new UnsupportedOperationException("GuiView.promptLine: see step 10 GUI work");
+    public TotemColor promptColor(Set<TotemColor> available) {
+        throw new UnsupportedOperationException("GuiView.promptColor not implemented");
+    }
+
+    @Override
+    public int promptOfferingTile(int trackSize) {
+        throw new UnsupportedOperationException("GuiView.promptOfferingTile not implemented");
+    }
+
+    @Override
+    public List<Integer> promptCharacterUpperIds(int budget) {
+        throw new UnsupportedOperationException("GuiView.promptCharacterUpperIds not implemented");
+    }
+
+    @Override
+    public List<Integer> promptCharacterLowerIds(int budget) {
+        throw new UnsupportedOperationException("GuiView.promptCharacterLowerIds not implemented");
+    }
+
+    @Override
+    public List<Integer> promptBuildingUpperIds(int remaining) {
+        throw new UnsupportedOperationException("GuiView.promptBuildingUpperIds not implemented");
+    }
+
+    @Override
+    public List<Integer> promptBuildingLowerIds(int remaining) {
+        throw new UnsupportedOperationException("GuiView.promptBuildingLowerIds not implemented");
+    }
+
+    @Override
+    public ExtraPickChoice promptExtraCard() {
+        throw new UnsupportedOperationException("GuiView.promptExtraCard not implemented");
     }
 }

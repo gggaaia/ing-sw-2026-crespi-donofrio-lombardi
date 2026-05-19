@@ -1,429 +1,416 @@
-package it.polimi.ingsw.controller.clientcontroller;
+package it.polimi.ingsw.controller.client;
 
 import it.polimi.ingsw.common.VirtualServer;
-import it.polimi.ingsw.common.dto.ActionResultDto;
-import it.polimi.ingsw.common.dto.GameStateDto;
-import it.polimi.ingsw.common.dto.PhaseVisitor;
+import it.polimi.ingsw.common.dto.GameSnapshot;
+import it.polimi.ingsw.common.dto.Phase;
+import it.polimi.ingsw.model.Board;
+import it.polimi.ingsw.model.card.BuildingCard;
+import it.polimi.ingsw.model.card.CharacterCard;
+import it.polimi.ingsw.model.enums.Era;
 import it.polimi.ingsw.model.enums.TotemColor;
 import it.polimi.ingsw.view.View;
 
 import java.rmi.RemoteException;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
 
 /**
- * Client-side controller. Two responsibilities:
+ * Controller client-side. Tiene un mini-stato locale che riflette
+ * quello che il server gli ha detto, aggiornato evento-per-evento.
  *
- *   - Translate incoming server notifications into View calls (the
- *     four onXxx methods, called from the network thread).
+ * Threading model (semplice):
+ *   - tutti i metodi pubblici sono synchronized
+ *   - i metodi di evento (chiamati dal thread di rete RMI o Socket)
+ *     aggiornano lo stato e fanno view.refresh()
+ *   - i metodi *Turn, se il turno \u00e8 nostro, BLOCCANO sul prompt
+ *     view.promptXxx() e poi mandano l'azione via virtualServer
+ *   - la chiamata di rete uscente (virtualServer.xxx()) avviene
+ *     dentro il metodo synchronized: il lock \u00e8 tenuto, ma la
+ *     chiamata \u00e8 veloce su RMI (microsecondi al massimo per il
+ *     dispatch) e su socket (writeObject in buffer OS)
  *
- *   - Drive the interactive input loop on the main thread:
- *     runInputLoop() blocks until a new game state arrives from the
- *     server, then asks the View for the right input based on the
- *     current phase and sends it via the VirtualServer stub.
- *
- * Phase-to-input dispatch is done with the visitor pattern (no
- * instanceof, no switch, no if/else for type discrimination): the
- * inner class InputPrompter implements PhaseVisitor and overrides
- * one method per phase to decide whether to prompt and what to send.
+ * Il "block" durante il prompt significa che, mentre l'utente pensa,
+ * gli eventi entranti dal server si accodano nel buffer del socket /
+ * thread pool RMI. Vengono processati appena l'utente sceglie.
  */
 public class ClientController {
 
     private final View view;
-    private String nickname;
-    private VirtualServer serverStub;
+    private String myNickname;
+    private VirtualServer virtualServer;
+
+    // === mini-stato locale ===
+
+    private Phase currentPhase;
+    private String currentPlayer;
+    private final List<String> joinedPlayers = new ArrayList<>();
+    private final Map<String, TotemColor> colorsByPlayer = new LinkedHashMap<>();
+    private final Map<String, Integer> prestige = new HashMap<>();
+    private final Map<String, Integer> food = new HashMap<>();
+    private final Map<String, List<CharacterCard>> handsByPlayer = new LinkedHashMap<>();
+    private final Map<String, List<BuildingCard>> buildingsByPlayer = new LinkedHashMap<>();
+    private Set<TotemColor> availableColors = new HashSet<>();
+    private int currentUpperBudget;
+    private int currentLowerBudget;
+    private int currentUpperRemaining;
+    private int currentLowerRemaining;
+    private int currentRound;
+    private Era currentEra;
+    private Board currentBoard;
+    private int expectedPlayers;
+    private List<String> finalLeaderboard;
+    private List<String> finalWinners;
 
     /**
-     * Most recent GameStateDto pushed by the server. Updated by
-     * onGameState (network thread) and read by runInputLoop (main
-     * thread) under the controller monitor. Null until the very
-     * first state arrives.
+     * Latch one-shot che il main thread del client (Rmi_Client.run /
+     * Socket_Client.run) usa per addormentarsi finch\u00e9 non arriva
+     * l'evento {@code onGameEnded}. Il network thread chiama
+     * {@code countDown()} dentro {@code gameEnded(...)} svegliando il
+     * main thread. Vedi {@link #awaitGameEnd()}.
      */
-    private GameStateDto currentState;
-    /**
-     * Bumped on every onGameState. The input loop remembers the
-     * version it last processed and waits until the version moves so
-     * the same state is not handled twice in a row.
-     */
-    private long stateVersion;
-    /**
-     * Set true by the InputPrompter when it sees a GAME_ENDED phase,
-     * so the input loop can return cleanly.
-     */
-    private boolean gameEnded;
-
-    /**
-     * Flipped to true by sendOrError() whenever the input loop
-     * actually transmitted something to the server in the current
-     * prompt cycle. The loop reads it after each visit() and, when
-     * set, advances lastSeenVersion up to consumeUpToVersion so
-     * that intermediate states that arrived DURING the prompt (with
-     * the same phase + turn we just answered) are not re-processed
-     * as if they still required input. Reset at the top of every
-     * loop iteration.
-     */
-    private boolean inputSentSinceLastWait;
-
-    /**
-     * Snapshot of stateVersion taken inside sendOrError() right
-     * BEFORE the synchronous call to the server. Everything up to
-     * (and including) this version is, by construction, a state the
-     * server produced before it received our input - those are
-     * duplicate intermediate states queued during the prompt and we
-     * are safe to skip them. States with a higher version arrived
-     * after we sent (typically the server's response to the action,
-     * possibly several broadcasts) and MUST still be processed,
-     * otherwise we would silently drop the server's reply and the
-     * loop would deadlock waiting for a state that never comes.
-     */
-    private long consumeUpToVersion;
+    private final CountDownLatch endLatch = new CountDownLatch(1);
 
     public ClientController(View view) {
         this.view = view;
     }
 
-    /**
-     * Wired by Rmi_Client / Socket_Client right after construction
-     * so the input loop can call back into the server.
-     */
-    public void setServerStub(VirtualServer serverStub) {
-        this.serverStub = serverStub;
+    /** Chiamato dall'adapter (Rmi_Client / Socket_Client) dopo il prompt nickname. */
+    public synchronized void setNickname(String nick) {
+        this.myNickname = nick;
     }
 
-    /**
-     * Asks the View for a nickname. Called once at start-up by the
-     * network adapter (Rmi_Client.run / Socket_Client.run) before
-     * issuing the very first connect call.
-     */
+    public synchronized String getMyNickname() {
+        return myNickname;
+    }
+
+    /** Chiamato dall'adapter per dare al controller il puntatore al server. */
+    public synchronized void setVirtualServer(VirtualServer vs) {
+        this.virtualServer = vs;
+    }
+
+    /** Prompt iniziale del nickname; chiamato dall'adapter. */
     public String promptNickname() {
         return view.promptNickname();
     }
 
-    public void setNickname(String nickname) {
-        this.nickname = nickname;
+    /**
+     * Blocca il chiamante finch\u00e9 non arriva l'evento
+     * {@code onGameEnded}. Usato da {@code Rmi_Client.run()} e
+     * {@code Socket_Client.run()} per tenere vivo il main thread
+     * durante la partita, senza fare polling. Il network thread
+     * chiama {@code endLatch.countDown()} dentro {@link #gameEnded}
+     * quando la partita termina.
+     */
+    public void awaitGameEnd() throws InterruptedException {
+        endLatch.await();
     }
 
-    public String getNickname() {
-        return nickname;
+    // === getter per la view (per refresh) ===
+
+    public synchronized Phase getCurrentPhase()                       { return currentPhase; }
+    public synchronized String getCurrentPlayer()                     { return currentPlayer; }
+    public synchronized List<String> getJoinedPlayers()               { return new ArrayList<>(joinedPlayers); }
+    public synchronized Map<String, TotemColor> getColorsByPlayer()   { return new LinkedHashMap<>(colorsByPlayer); }
+    public synchronized Map<String, Integer> getPrestige()            { return new HashMap<>(prestige); }
+    public synchronized Map<String, Integer> getFood()                { return new HashMap<>(food); }
+    public synchronized Map<String, List<CharacterCard>> getHandsByPlayer()   { return new LinkedHashMap<>(handsByPlayer); }
+    public synchronized Map<String, List<BuildingCard>> getBuildingsByPlayer() { return new LinkedHashMap<>(buildingsByPlayer); }
+    public synchronized Set<TotemColor> getAvailableColors()          { return new HashSet<>(availableColors); }
+    public synchronized int getCurrentUpperBudget()                   { return currentUpperBudget; }
+    public synchronized int getCurrentLowerBudget()                   { return currentLowerBudget; }
+    public synchronized int getCurrentUpperRemaining()                { return currentUpperRemaining; }
+    public synchronized int getCurrentLowerRemaining()                { return currentLowerRemaining; }
+    public synchronized int getCurrentRound()                         { return currentRound; }
+    public synchronized Era getCurrentEra()                           { return currentEra; }
+    public synchronized Board getCurrentBoard()                       { return currentBoard; }
+    public synchronized int getExpectedPlayers()                      { return expectedPlayers; }
+    public synchronized List<String> getFinalLeaderboard()            { return finalLeaderboard == null ? null : new ArrayList<>(finalLeaderboard); }
+    public synchronized List<String> getFinalWinners()                { return finalWinners == null ? null : new ArrayList<>(finalWinners); }
+
+    // ====================================================================
+    // Event handlers (chiamati da Rmi_Client / Socket_Client)
+    // ====================================================================
+
+    public synchronized void playerJoined(String nick) {
+        if (!joinedPlayers.contains(nick)) {
+            joinedPlayers.add(nick);
+        }
+        view.refresh(this);
     }
 
-    // --- onXxx: called from the network thread --------------------------
-
-    public synchronized void onGameState(GameStateDto state) {
-        this.currentState = state;
-        this.stateVersion++;
-        view.displayState(state);
-        notifyAll();
+    public synchronized void awaitPlayerCount(String firstPlayerNick) {
+        this.currentPlayer = firstPlayerNick;
+        view.refresh(this);
+        if (firstPlayerNick.equals(myNickname)) {
+            int count = view.promptPlayerCount();
+            sendOrError(new SafeSend() {
+                @Override public void send() throws RemoteException {
+                    virtualServer.setPlayerCount(myNickname, count);
+                }
+            });
+        }
     }
 
-    public void onActionResult(ActionResultDto result) {
-        view.displayActionResult(result);
+    public synchronized void playerCountSet(int count) {
+        this.expectedPlayers = count;
+        view.refresh(this);
     }
 
-    public void onInfo(String message) {
-        view.displayInfo(message);
+    public synchronized void awaitMorePlayers(int joined, int total) {
+        view.refresh(this);
     }
 
-    public void onError(String message) {
-        view.displayError(message);
+    public synchronized void colorTurn(String nick, Set<TotemColor> available) {
+        this.currentPhase = Phase.COLOR_PICKING;
+        this.currentPlayer = nick;
+        this.availableColors = new HashSet<>(available);
+        view.refresh(this);
+        if (nick.equals(myNickname)) {
+            TotemColor color = view.promptColor(new HashSet<>(available));
+            final TotemColor c = color;
+            sendOrError(new SafeSend() {
+                @Override public void send() throws RemoteException {
+                    virtualServer.pickColor(myNickname, c);
+                }
+            });
+        }
     }
 
-    // --- input loop: called from the main thread ------------------------
+    public synchronized void colorPicked(String nick, TotemColor color) {
+        colorsByPlayer.put(nick, color);
+        availableColors.remove(color);
+        view.refresh(this);
+    }
+
+    public synchronized void matchStarted(List<String> playerOrder, Era era) {
+        this.currentEra = era;
+        view.refresh(this);
+    }
+
+    public synchronized void eraChanged(Era newEra) {
+        this.currentEra = newEra;
+        view.refresh(this);
+    }
+
+    public synchronized void roundStarted(int round) {
+        this.currentRound = round;
+        view.refresh(this);
+    }
+
+    public synchronized void offeringTileTurn(String nick, int trackSize) {
+        this.currentPhase = Phase.PICK_OFFERING_TILE;
+        this.currentPlayer = nick;
+        view.refresh(this);
+        if (nick.equals(myNickname)) {
+            int idx = view.promptOfferingTile(trackSize);
+            final int finalIdx = idx;
+            sendOrError(new SafeSend() {
+                @Override public void send() throws RemoteException {
+                    virtualServer.pickOfferingTile(myNickname, finalIdx);
+                }
+            });
+        }
+    }
+
+    public synchronized void offeringTilePicked(String nick, int tileIndex) {
+        view.refresh(this);
+    }
+
+    public synchronized void characterPickTurn(String nick, int upperBudget, int lowerBudget) {
+        this.currentPhase = Phase.TURN_PICK_CARDS_CHARACTER;
+        this.currentPlayer = nick;
+        this.currentUpperBudget = upperBudget;
+        this.currentLowerBudget = lowerBudget;
+        view.refresh(this);
+        if (nick.equals(myNickname)) {
+            final List<Integer> upper = view.promptCharacterUpperIds(upperBudget);
+            final List<Integer> lower = view.promptCharacterLowerIds(lowerBudget);
+            sendOrError(new SafeSend() {
+                @Override public void send() throws RemoteException {
+                    virtualServer.pickCharacterCards(myNickname, upper, lower);
+                }
+            });
+        }
+    }
+
+    public synchronized void characterCardsPicked(String nick,
+                                                  List<CharacterCard> upper,
+                                                  List<CharacterCard> lower) {
+        List<CharacterCard> hand = handsByPlayer.get(nick);
+        if (hand == null) {
+            hand = new ArrayList<>();
+            handsByPlayer.put(nick, hand);
+        }
+        hand.addAll(upper);
+        hand.addAll(lower);
+        view.refresh(this);
+    }
+
+    public synchronized void buildingPickTurn(String nick, int upperRemaining, int lowerRemaining) {
+        this.currentPhase = Phase.TURN_PICK_CARDS_BUILDING;
+        this.currentPlayer = nick;
+        this.currentUpperRemaining = upperRemaining;
+        this.currentLowerRemaining = lowerRemaining;
+        view.refresh(this);
+        if (nick.equals(myNickname)) {
+            final List<Integer> upper = view.promptBuildingUpperIds(upperRemaining);
+            final List<Integer> lower = view.promptBuildingLowerIds(lowerRemaining);
+            sendOrError(new SafeSend() {
+                @Override public void send() throws RemoteException {
+                    virtualServer.pickBuildingCards(myNickname, upper, lower);
+                }
+            });
+        }
+    }
+
+    public synchronized void buildingCardsBought(String nick,
+                                                 List<BuildingCard> upper,
+                                                 List<BuildingCard> lower) {
+        List<BuildingCard> owned = buildingsByPlayer.get(nick);
+        if (owned == null) {
+            owned = new ArrayList<>();
+            buildingsByPlayer.put(nick, owned);
+        }
+        owned.addAll(upper);
+        owned.addAll(lower);
+        view.refresh(this);
+    }
+
+    public synchronized void extraPickTurn(String nick) {
+        this.currentPhase = Phase.RESET_TURN_ORDER_AND_PICK_EXTRA_BUILDING;
+        this.currentPlayer = nick;
+        view.refresh(this);
+        if (nick.equals(myNickname)) {
+            View.ExtraPickChoice choice = view.promptExtraCard();
+            final Integer id = choice.cardId;
+            final boolean isChar = choice.isCharacter;
+            sendOrError(new SafeSend() {
+                @Override public void send() throws RemoteException {
+                    virtualServer.pickExtraCard(myNickname, id, isChar);
+                }
+            });
+        }
+    }
+
+    public synchronized void extraCardPicked(String nick, Integer cardId, boolean isCharacter) {
+        view.refresh(this);
+    }
+
+    public synchronized void prestigeChanged(String nick, int newPrestige) {
+        prestige.put(nick, newPrestige);
+        view.refresh(this);
+    }
+
+    public synchronized void foodChanged(String nick, int newFood) {
+        food.put(nick, newFood);
+        view.refresh(this);
+    }
+
+    public synchronized void roundEnded() {
+        view.refresh(this);
+    }
+
+    public synchronized void gameEnded(List<String> leaderboard, List<String> winners) {
+        this.currentPhase = Phase.GAME_ENDED;
+        this.finalLeaderboard = leaderboard;
+        this.finalWinners = winners;
+        view.refresh(this);
+        view.displayInfo("Game ended. Winners: " + winners);
+        // Sveglia il main thread bloccato in awaitGameEnd() perch\u00e9
+        // possa fare la sequenza di cleanup e uscire dal JVM.
+        endLatch.countDown();
+    }
+
+    public synchronized void matchPaused(String reason) {
+        this.currentPhase = Phase.PAUSED_WAITING_RECONNECT;
+        view.refresh(this);
+        view.displayInfo("Match paused: " + reason);
+    }
+
+    public synchronized void matchResumed() {
+        view.refresh(this);
+        view.displayInfo("Match resumed.");
+    }
+
+    public synchronized void playerDisconnected(String nick) {
+        view.refresh(this);
+        view.displayInfo(nick + " disconnected.");
+    }
+
+    public synchronized void playerReconnected(String nick) {
+        view.refresh(this);
+        view.displayInfo(nick + " reconnected.");
+    }
+
+    public synchronized void actionRejected(String reason) {
+        view.displayError(reason);
+    }
 
     /**
-     * Blocks waiting for state updates and prompts the user for the
-     * appropriate input each time. Returns when the visitor sees a
-     * GAME_ENDED state. If the calling thread is interrupted, the
-     * loop exits cleanly.
+     * Ricostruisce completamente il mini-stato dallo snapshot ricevuto.
+     * Usato sia all'arrivo iniziale del client che alla riconnessione.
      */
-    public void runInputLoop() {
-        long lastSeenVersion = -1L;
-        while (!gameEnded) {
-            GameStateDto state;
-            synchronized (this) {
-                while (currentState == null || stateVersion == lastSeenVersion) {
-                    try {
-                        wait();
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        return;
-                    }
-                }
-                state = currentState;
-                lastSeenVersion = stateVersion;
-                inputSentSinceLastWait = false;
-            }
-            // Visit the phase polymorphically; the visitor either prompts
-            // and sends (if it is our turn and the phase wants input) or
-            // does nothing (so we go back and wait for the next state).
-            state.getPhase().accept(new InputPrompter(state));
-
-            // If we actually sent something to the server, advance
-            // lastSeenVersion to the snapshot taken inside sendOrError
-            // right before the call. This drops the duplicate
-            // intermediate states that piled up DURING the prompt
-            // (so we do not re-prompt for an action already submitted)
-            // WITHOUT swallowing the server's response, which arrives
-            // at a strictly higher version. When we did not send (not
-            // our turn, automatic phase, etc.) we leave lastSeenVersion
-            // alone so the loop still reacts to whatever new state
-            // showed up.
-            if (inputSentSinceLastWait) {
-                synchronized (this) {
-                    if (consumeUpToVersion > lastSeenVersion) {
-                        lastSeenVersion = consumeUpToVersion;
-                    }
-                }
-            }
+    public synchronized void gameSnapshot(GameSnapshot s) {
+        this.currentPhase = s.getCurrentPhase();
+        this.currentPlayer = s.getCurrentPlayer();
+        this.joinedPlayers.clear();
+        if (s.getPlayerOrder() != null) {
+            this.joinedPlayers.addAll(s.getPlayerOrder());
         }
+        this.colorsByPlayer.clear();
+        if (s.getColors() != null) {
+            this.colorsByPlayer.putAll(s.getColors());
+        }
+        this.prestige.clear();
+        if (s.getPrestige() != null) {
+            this.prestige.putAll(s.getPrestige());
+        }
+        this.food.clear();
+        if (s.getFood() != null) {
+            this.food.putAll(s.getFood());
+        }
+        this.handsByPlayer.clear();
+        if (s.getHands() != null) {
+            this.handsByPlayer.putAll(s.getHands());
+        }
+        this.buildingsByPlayer.clear();
+        if (s.getBuildings() != null) {
+            this.buildingsByPlayer.putAll(s.getBuildings());
+        }
+        this.currentBoard = s.getBoard();
+        this.currentEra = s.getEra();
+        this.currentRound = s.getRound();
+        this.currentUpperBudget = s.getUpperBudget();
+        this.currentLowerBudget = s.getLowerBudget();
+        this.currentUpperRemaining = s.getUpperRemaining();
+        this.currentLowerRemaining = s.getLowerRemaining();
+        this.availableColors = s.getAvailableColors() != null
+                ? new HashSet<>(s.getAvailableColors()) : new HashSet<TotemColor>();
+        this.expectedPlayers = s.getExpectedPlayers();
+        this.finalLeaderboard = s.getLeaderboard();
+        this.finalWinners = s.getWinners();
+        view.refresh(this);
     }
 
-    // --- prompt helpers --------------------------------------------------
+    // ====================================================================
+    // Helper interno: send con catch di RemoteException
+    // ====================================================================
 
-    private TotemColor promptColor(Set<TotemColor> available) {
-        while (true) {
-            String input = view.promptLine(
-                    "Pick a color " + available + ": ").trim().toUpperCase();
-            try {
-                TotemColor color = TotemColor.valueOf(input);
-                if (available.contains(color)) {
-                    return color;
-                }
-                view.displayError("That color is not available, try again.");
-            } catch (IllegalArgumentException e) {
-                view.displayError("Unknown color name, try again.");
-            }
-        }
-    }
-
-    /**
-     * Reads a comma-separated list of integers (or empty for "no
-     * picks"). Skips tokens that don't parse instead of erroring out.
-     */
-    private List<Integer> promptIntList(String prompt) {
-        String line = view.promptLine(prompt).trim();
-        List<Integer> result = new ArrayList<>();
-        if (line.isEmpty()) {
-            return result;
-        }
-        String[] parts = line.split("\\s*,\\s*");
-        for (String p : parts) {
-            try {
-                result.add(Integer.parseInt(p.trim()));
-            } catch (NumberFormatException e) {
-                view.displayError("Skipping invalid id: " + p);
-            }
-        }
-        return result;
-    }
-
-    private void sendOrError(SafeSend action) {
-        // Snapshot stateVersion BEFORE the synchronous call. This
-        // captures every state the server pushed while the user was
-        // blocked at the prompt - those are duplicates of the step
-        // we just answered and runInputLoop() will discard them.
-        // Anything that arrives at version > snapshot is a fresh
-        // server reaction to our send (e.g. PICK_OFFERING_TILE
-        // arriving after pickColor) and must reach the visitor.
-        final long versionBeforeSend;
-        synchronized (this) {
-            versionBeforeSend = stateVersion;
-        }
-        try {
-            action.send();
-            synchronized (this) {
-                consumeUpToVersion = versionBeforeSend;
-                inputSentSinceLastWait = true;
-            }
-        } catch (RemoteException e) {
-            view.displayError("Send failed: " + e.getMessage());
-        }
-    }
-
-    /**
-     * Tiny SAM-shape helper used by the prompter so each visit method
-     * does not have to spell out its own try/catch. Implemented by
-     * anonymous inner classes (no lambdas allowed in this project).
-     */
     private interface SafeSend {
         void send() throws RemoteException;
     }
 
-    // --- PhaseVisitor implementation ------------------------------------
-
-    private class InputPrompter implements PhaseVisitor {
-
-        private final GameStateDto state;
-
-        InputPrompter(GameStateDto state) {
-            this.state = state;
-        }
-
-        private boolean isOurTurn() {
-            return nickname != null
-                    && nickname.equals(state.getCurrentPlayerNickname());
-        }
-
-        @Override
-        public void visitWaitingForNickname() {
-            // Nickname has already been submitted via the connect call.
-        }
-
-        @Override
-        public void visitWaitingForPlayerCount() {
-            if (!isOurTurn()) {
-                return;
-            }
-            int count;
-            while (true) {
-                count = view.promptInt("How many participants? (2..5): ");
-                if (count >= 2 && count <= 5) {
-                    break;
-                }
-                view.displayError("Must be between 2 and 5.");
-            }
-            final int finalCount = count;
-            sendOrError(new SafeSend() {
-                @Override
-                public void send() throws RemoteException {
-                    serverStub.setPlayerCount(nickname, finalCount);
-                }
-            });
-        }
-
-        @Override
-        public void visitWaitingForPlayers() {
-            // Nothing to do: just wait for more players to join.
-        }
-
-        @Override
-        public void visitColorPicking() {
-            if (!isOurTurn()) {
-                return;
-            }
-            final TotemColor color = promptColor(state.getAvailableColors());
-            sendOrError(new SafeSend() {
-                @Override
-                public void send() throws RemoteException {
-                    serverStub.pickColor(nickname, color);
-                }
-            });
-        }
-
-        @Override
-        public void visitPickOfferingTile() {
-            if (!isOurTurn()) {
-                return;
-            }
-            final int trackSize = state.getBoard() != null
-                    ? state.getBoard().getOfferingTrack().size()
-                    : 0;
-            int idx;
-            while (true) {
-                idx = view.promptInt("Offering tile index (0.." + (trackSize - 1) + "): ");
-                if (idx >= 0 && idx < trackSize) {
-                    break;
-                }
-                view.displayError("Out of range.");
-            }
-            final int finalIdx = idx;
-            sendOrError(new SafeSend() {
-                @Override
-                public void send() throws RemoteException {
-                    serverStub.pickOfferingTile(nickname, finalIdx);
-                }
-            });
-        }
-
-        @Override
-        public void visitTurnPickCardsCharacter() {
-            if (!isOurTurn()) {
-                return;
-            }
-            final List<Integer> upper = promptIntList(
-                    "Upper-row character ids (comma-separated, blank to skip; budget "
-                            + state.getCurrentUpperBudget() + "): ");
-            final List<Integer> lower = promptIntList(
-                    "Lower-row character ids (comma-separated, blank to skip; budget "
-                            + state.getCurrentLowerBudget() + "): ");
-            sendOrError(new SafeSend() {
-                @Override
-                public void send() throws RemoteException {
-                    serverStub.pickCharacterCards(nickname, upper, lower);
-                }
-            });
-        }
-
-        @Override
-        public void visitTurnPickCardsBuilding() {
-            if (!isOurTurn()) {
-                return;
-            }
-            final List<Integer> upper = promptIntList(
-                    "Upper-row building ids (comma-separated, blank to skip; remaining "
-                            + state.getCurrentUpperRemaining() + "): ");
-            final List<Integer> lower = promptIntList(
-                    "Lower-row building ids (comma-separated, blank to skip; remaining "
-                            + state.getCurrentLowerRemaining() + "): ");
-            sendOrError(new SafeSend() {
-                @Override
-                public void send() throws RemoteException {
-                    serverStub.pickBuildingCards(nickname, upper, lower);
-                }
-            });
-        }
-
-        @Override
-        public void visitResetTurnOrderAndPickExtraBuilding() {
-            if (!isOurTurn()) {
-                return;
-            }
-            String input = view.promptLine(
-                    "Extra pick: 'skip', 'char <id>', or 'build <id>': ").trim().toLowerCase();
-            final Integer cardId;
-            final boolean isCharacter;
-            if (input.startsWith("skip")) {
-                cardId = null;
-                isCharacter = true;
-            } else {
-                String[] parts = input.split("\\s+");
-                if (parts.length != 2) {
-                    view.displayError("Format: skip | char <id> | build <id>");
-                    return;
-                }
-                isCharacter = parts[0].startsWith("char");
-                try {
-                    cardId = Integer.parseInt(parts[1]);
-                } catch (NumberFormatException e) {
-                    view.displayError("Invalid id");
-                    return;
-                }
-            }
-            final Integer finalCardId = cardId;
-            final boolean finalIsCharacter = isCharacter;
-            sendOrError(new SafeSend() {
-                @Override
-                public void send() throws RemoteException {
-                    serverStub.pickExtraCard(nickname, finalCardId, finalIsCharacter);
-                }
-            });
-        }
-
-        @Override
-        public void visitResolveBuildingsAndEvents() {
-            // Automatic phase, no input expected.
-        }
-
-        @Override
-        public void visitPausedWaitingReconnect() {
-            // Match is paused; nothing to do until enough players come back.
-        }
-
-        @Override
-        public void visitGameEnded() {
-            view.displayInfo("Game ended.");
-            gameEnded = true;
+    private void sendOrError(SafeSend action) {
+        try {
+            action.send();
+        } catch (RemoteException e) {
+            view.displayError("Send failed: " + e.getMessage());
         }
     }
 }

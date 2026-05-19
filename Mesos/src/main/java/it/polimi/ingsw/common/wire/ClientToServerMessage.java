@@ -6,194 +6,104 @@ import java.io.Serializable;
 import java.util.List;
 
 /**
- * Wire-message abstract base for every call going from a socket client
- * to the server. Mirrors VirtualServer one-to-one: one concrete inner
- * subclass per VirtualServer method.
+ * Wire message base per il verso client \u2192 server (trasporto
+ * socket). Una classe nested per ogni metodo di {@code VirtualServer}.
  *
- * Discrimination on the receiving side (Socket_ClientHandler) is done
- * via the visitor pattern (double dispatch): no instanceof, no switch,
- * no if/else. Each subclass overrides accept(Visitor) to call the
- * matching visitXxx method.
- *
- * Note: the nickname does not appear in wire bodies after Connect.
- * The server-side handler binds itself to the nickname on the first
- * Connect and uses that binding for every subsequent message. The
- * VirtualView "client" parameter from VirtualServer is never on the
- * wire either: on socket the server-side handler already holds its
- * own Socket_VirtualClient as the back-channel.
+ * Discrimina via Visitor pattern: la classe concreta sa quale
+ * {@code visitXxx} chiamare. Il visitor \u00e8 implementato da
+ * {@code Socket_ClientHandler}, lato server.
  */
 public abstract class ClientToServerMessage implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
-    /**
-     * Receives the polymorphic dispatch back from the visitor. Each
-     * concrete subclass implements this with one line that calls the
-     * matching visitXxx on the visitor.
-     */
-    public abstract void accept(Visitor visitor);
+    public abstract void accept(Visitor v);
 
-    /**
-     * Server-side dispatcher contract. Implemented by
-     * Socket_ClientHandler.
-     */
     public interface Visitor {
         void visitConnect(String nickname);
-
-        void visitSetPlayerCount(int count);
-
-        void visitPickColor(TotemColor color);
-
-        void visitPickOfferingTile(int tileIndex);
-
-        void visitPickCharacterCards(List<Integer> upperRowIds, List<Integer> lowerRowIds);
-
-        void visitPickBuildingCards(List<Integer> upperRowIds, List<Integer> lowerRowIds);
-
-        void visitPickExtraCard(Integer cardId, boolean isCharacter);
+        void visitDisconnect(String nickname);
+        void visitSetPlayerCount(String nickname, int count);
+        void visitPickColor(String nickname, TotemColor color);
+        void visitPickOfferingTile(String nickname, int tileIndex);
+        void visitPickCharacterCards(String nickname, List<Integer> upper, List<Integer> lower);
+        void visitPickBuildingCards(String nickname, List<Integer> upper, List<Integer> lower);
+        void visitPickExtraCard(String nickname, Integer cardId, boolean isCharacter);
     }
 
     public static class Connect extends ClientToServerMessage {
         private static final long serialVersionUID = 1L;
         private final String nickname;
+        public Connect(String nickname) { this.nickname = nickname; }
+        @Override public void accept(Visitor v) { v.visitConnect(nickname); }
+    }
 
-        public Connect(String nickname) {
-            this.nickname = nickname;
-        }
-
-        public String getNickname() {
-            return nickname;
-        }
-
-        @Override
-        public void accept(Visitor visitor) {
-            visitor.visitConnect(nickname);
-        }
+    public static class Disconnect extends ClientToServerMessage {
+        private static final long serialVersionUID = 1L;
+        private final String nickname;
+        public Disconnect(String nickname) { this.nickname = nickname; }
+        @Override public void accept(Visitor v) { v.visitDisconnect(nickname); }
     }
 
     public static class SetPlayerCount extends ClientToServerMessage {
         private static final long serialVersionUID = 1L;
+        private final String nickname;
         private final int count;
-
-        public SetPlayerCount(int count) {
-            this.count = count;
+        public SetPlayerCount(String nickname, int count) {
+            this.nickname = nickname; this.count = count;
         }
-
-        public int getCount() {
-            return count;
-        }
-
-        @Override
-        public void accept(Visitor visitor) {
-            visitor.visitSetPlayerCount(count);
-        }
+        @Override public void accept(Visitor v) { v.visitSetPlayerCount(nickname, count); }
     }
 
     public static class PickColor extends ClientToServerMessage {
         private static final long serialVersionUID = 1L;
+        private final String nickname;
         private final TotemColor color;
-
-        public PickColor(TotemColor color) {
-            this.color = color;
+        public PickColor(String nickname, TotemColor color) {
+            this.nickname = nickname; this.color = color;
         }
-
-        public TotemColor getColor() {
-            return color;
-        }
-
-        @Override
-        public void accept(Visitor visitor) {
-            visitor.visitPickColor(color);
-        }
+        @Override public void accept(Visitor v) { v.visitPickColor(nickname, color); }
     }
 
     public static class PickOfferingTile extends ClientToServerMessage {
         private static final long serialVersionUID = 1L;
+        private final String nickname;
         private final int tileIndex;
-
-        public PickOfferingTile(int tileIndex) {
-            this.tileIndex = tileIndex;
+        public PickOfferingTile(String nickname, int tileIndex) {
+            this.nickname = nickname; this.tileIndex = tileIndex;
         }
-
-        public int getTileIndex() {
-            return tileIndex;
-        }
-
-        @Override
-        public void accept(Visitor visitor) {
-            visitor.visitPickOfferingTile(tileIndex);
-        }
+        @Override public void accept(Visitor v) { v.visitPickOfferingTile(nickname, tileIndex); }
     }
 
     public static class PickCharacterCards extends ClientToServerMessage {
         private static final long serialVersionUID = 1L;
-        private final List<Integer> upperRowIds;
-        private final List<Integer> lowerRowIds;
-
-        public PickCharacterCards(List<Integer> upperRowIds, List<Integer> lowerRowIds) {
-            this.upperRowIds = upperRowIds;
-            this.lowerRowIds = lowerRowIds;
+        private final String nickname;
+        private final List<Integer> upper;
+        private final List<Integer> lower;
+        public PickCharacterCards(String nickname, List<Integer> upper, List<Integer> lower) {
+            this.nickname = nickname; this.upper = upper; this.lower = lower;
         }
-
-        public List<Integer> getUpperRowIds() {
-            return upperRowIds;
-        }
-
-        public List<Integer> getLowerRowIds() {
-            return lowerRowIds;
-        }
-
-        @Override
-        public void accept(Visitor visitor) {
-            visitor.visitPickCharacterCards(upperRowIds, lowerRowIds);
-        }
+        @Override public void accept(Visitor v) { v.visitPickCharacterCards(nickname, upper, lower); }
     }
 
     public static class PickBuildingCards extends ClientToServerMessage {
         private static final long serialVersionUID = 1L;
-        private final List<Integer> upperRowIds;
-        private final List<Integer> lowerRowIds;
-
-        public PickBuildingCards(List<Integer> upperRowIds, List<Integer> lowerRowIds) {
-            this.upperRowIds = upperRowIds;
-            this.lowerRowIds = lowerRowIds;
+        private final String nickname;
+        private final List<Integer> upper;
+        private final List<Integer> lower;
+        public PickBuildingCards(String nickname, List<Integer> upper, List<Integer> lower) {
+            this.nickname = nickname; this.upper = upper; this.lower = lower;
         }
-
-        public List<Integer> getUpperRowIds() {
-            return upperRowIds;
-        }
-
-        public List<Integer> getLowerRowIds() {
-            return lowerRowIds;
-        }
-
-        @Override
-        public void accept(Visitor visitor) {
-            visitor.visitPickBuildingCards(upperRowIds, lowerRowIds);
-        }
+        @Override public void accept(Visitor v) { v.visitPickBuildingCards(nickname, upper, lower); }
     }
 
     public static class PickExtraCard extends ClientToServerMessage {
         private static final long serialVersionUID = 1L;
+        private final String nickname;
         private final Integer cardId;
         private final boolean isCharacter;
-
-        public PickExtraCard(Integer cardId, boolean isCharacter) {
-            this.cardId = cardId;
-            this.isCharacter = isCharacter;
+        public PickExtraCard(String nickname, Integer cardId, boolean isCharacter) {
+            this.nickname = nickname; this.cardId = cardId; this.isCharacter = isCharacter;
         }
-
-        public Integer getCardId() {
-            return cardId;
-        }
-
-        public boolean isCharacter() {
-            return isCharacter;
-        }
-
-        @Override
-        public void accept(Visitor visitor) {
-            visitor.visitPickExtraCard(cardId, isCharacter);
-        }
+        @Override public void accept(Visitor v) { v.visitPickExtraCard(nickname, cardId, isCharacter); }
     }
 }

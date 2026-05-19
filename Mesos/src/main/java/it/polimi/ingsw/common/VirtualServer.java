@@ -1,7 +1,5 @@
 package it.polimi.ingsw.common;
 
-import it.polimi.ingsw.common.dto.ActionResultDto;
-import it.polimi.ingsw.common.dto.GameStateDto;
 import it.polimi.ingsw.model.enums.TotemColor;
 
 import java.rmi.Remote;
@@ -9,108 +7,77 @@ import java.rmi.RemoteException;
 import java.util.List;
 
 /**
- * Every operation a client may ask the server to perform. Two kinds:
+ * Contratto delle chiamate dal client al server. Ogni metodo
+ * corrisponde a un'azione del giocatore: ogni parametro \u00e8 un dato
+ * tipato (numeri, enum, liste di id, stringhe), niente DTO grossi.
  *
- *   - The 7 "do something" methods (connect, setPlayerCount, pickColor,
- *     pickOfferingTile, pickCharacterCards, pickBuildingCards,
- *     pickExtraCard). Their parameters are small primitives, ids,
- *     enum values or short lists; they never carry a big DTO.
+ * Implementato da {@code Rmi_Server} e da {@code Socket_VirtualServer}.
+ * I controller (client e server) parlano sempre attraverso questa
+ * interfaccia: non sanno quale dei due implementatori sta sotto.
  *
- *   - The 4 "pull" methods (getState, getLastActionResult,
- *     getLastInfo, getLastError) used by the RMI client side after
- *     receiving a notifyXxx callback: the server returns the value
- *     it last stored in this nickname's buffer. Socket clients never
- *     call these; the socket transport carries the payload on the
- *     wire (push) instead.
- *
- * Trust assumption: the client never lies about its nickname.
- * Acceptable for a class project; flag in the report.
- *
- * Only connect carries the VirtualView client argument; the server
- * stores it once and uses it from then on. Subsequent methods identify
- * the caller by nickname only.
+ * Il server identifica il chiamante dal nickname passato in ogni
+ * metodo. Non c'\u00e8 autenticazione: il modello di identit\u00e0
+ * \u00e8 basato sul trust che il client non menta sul proprio nickname.
  */
 public interface VirtualServer extends Remote {
 
     /**
-     * First call any client makes. Carries the nickname the client
-     * wants AND the client's VirtualView so the server can keep the
-     * stub for outgoing notifyXxx calls.
+     * Prima chiamata che ogni client fa. Porta il nickname richiesto e
+     * la propria VirtualView (il back-channel server-to-client).
      */
     void connect(String nickname, VirtualView client) throws RemoteException;
 
     /**
-     * The first player chooses how many participants the match will
-     * have. Only accepted while the controller is in
-     * WAITING_FOR_PLAYER_COUNT.
+     * Disconnessione esplicita. Il client comunica al server che sta
+     * uscendo. Server e client si liberano delle risorse.
+     */
+    void disconnect(String nickname) throws RemoteException;
+
+    /**
+     * Il primo giocatore sceglie quanti partecipanti avr\u00e0 la
+     * partita. Accettato solo durante {@code WAITING_FOR_PLAYER_COUNT}.
      */
     void setPlayerCount(String nickname, int count) throws RemoteException;
 
     /**
-     * Picks the calling player's totem color. Only accepted in
-     * COLOR_PICKING, only from the player at the head of the pick
-     * queue, only with a still-available color.
+     * Sceglie il colore del totem per il chiamante. Accettato solo
+     * durante {@code COLOR_PICKING}, dal giocatore al turno.
      */
     void pickColor(String nickname, TotemColor color) throws RemoteException;
 
     /**
-     * Places the calling player's totem on the offering tile at the
-     * given index. Only accepted in PICK_OFFERING_TILE, from the
-     * player whose turn it currently is.
+     * Posiziona il totem sulla tile dell'offering track al dato indice.
+     * Accettato solo durante {@code PICK_OFFERING_TILE}, dal giocatore
+     * il cui turno \u00e8 corrente.
      */
     void pickOfferingTile(String nickname, int tileIndex) throws RemoteException;
 
     /**
-     * Picks character cards from the upper and/or lower row, by id,
-     * within the budgets fixed by the offering tile. Only accepted in
-     * TURN_PICK_CARDS_CHARACTER from the resolving player. Either
-     * list may be empty or null (interpreted as empty).
+     * Sceglie carte personaggio dalle file (upper / lower) per id,
+     * entro i budget fissati dalla tile dell'offering. Accettato solo
+     * durante {@code TURN_PICK_CARDS_CHARACTER}. Le liste possono
+     * essere vuote.
      */
     void pickCharacterCards(String nickname,
                             List<Integer> upperRowIds,
                             List<Integer> lowerRowIds) throws RemoteException;
 
     /**
-     * Buys building cards from the upper and/or lower row, by id,
-     * within the leftover budgets and food. Only accepted in
-     * TURN_PICK_CARDS_BUILDING from the resolving player. Either
-     * list may be empty or null.
+     * Compra carte edificio dalle file (upper / lower) per id, entro i
+     * budget residui e il cibo. Accettato solo durante
+     * {@code TURN_PICK_CARDS_BUILDING}.
      */
     void pickBuildingCards(String nickname,
                            List<Integer> upperRowIds,
                            List<Integer> lowerRowIds) throws RemoteException;
 
     /**
-     * Performs the optional extra pick granted by the special
-     * building. Only accepted in
-     * RESET_TURN_ORDER_AND_PICK_EXTRA_BUILDING from the
-     * special-building owner. cardId == null means "skip";
-     * isCharacter tells the server whether the requested card is a
-     * character or a building.
+     * Esegue la pesca extra opzionale concessa dall'edificio speciale.
+     * {@code cardId == null} significa "salta"; {@code isCharacter}
+     * dice al server se la carta scelta \u00e8 personaggio o edificio.
+     * Accettato solo durante {@code RESET_TURN_ORDER_AND_PICK_EXTRA_BUILDING}.
      */
     void pickExtraCard(String nickname,
                        Integer cardId,
                        boolean isCharacter) throws RemoteException;
-
-    /**
-     * Pull-side of the "state changed" notification. Returns whatever
-     * GameStateDto the server last stored in this nickname's buffer
-     * before the most recent notifyStateChanged callback.
-     */
-    GameStateDto getState(String nickname) throws RemoteException;
-
-    /**
-     * Pull-side of the "action result available" notification.
-     */
-    ActionResultDto getLastActionResult(String nickname) throws RemoteException;
-
-    /**
-     * Pull-side of the "info available" notification.
-     */
-    String getLastInfo(String nickname) throws RemoteException;
-
-    /**
-     * Pull-side of the "error available" notification.
-     */
-    String getLastError(String nickname) throws RemoteException;
 }
