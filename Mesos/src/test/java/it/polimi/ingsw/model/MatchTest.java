@@ -154,6 +154,14 @@ class MatchTest {
     @Test
     @DisplayName("Era Transition: Moves to next era correctly")
     void testMoveToNextEra() {
+        // Board.newUpperBuilding indexes BUILDINGS_PER_ERA by (numPlayers - 2),
+        // so the match must contain a valid player count (2..5) before invoking
+        // moveToNextEra, otherwise the call throws ArrayIndexOutOfBoundsException
+        // instead of the expected EmptyDeckException.
+        match.addPlayer(p1);
+        match.addPlayer(p2);
+        match.addPlayer(p3);
+
         try {
             match.moveToNextEra(Era.ERA_2);
             assertEquals(Era.ERA_2, match.getCurrentEra(), "The current Era must be updated to ERA_2");
