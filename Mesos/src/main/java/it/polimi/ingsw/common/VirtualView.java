@@ -2,6 +2,7 @@ package it.polimi.ingsw.common;
 
 import it.polimi.ingsw.common.dto.GameSnapshot;
 import it.polimi.ingsw.common.dto.Phase;
+import it.polimi.ingsw.model.Board;
 import it.polimi.ingsw.model.card.BuildingCard;
 import it.polimi.ingsw.model.card.CharacterCard;
 import it.polimi.ingsw.model.enums.Era;
@@ -128,11 +129,30 @@ public interface VirtualView extends Remote {
 
     // === EVENTI SINGLE-PLAYER ===
 
-    /** L'azione del chiamante \u00e8 stata rifiutata dal server. */
+    /**
+     * Il connect del client \u00e8 stato rifiutato (es. nessuna partita
+     * sta accettando giocatori, lobby piena, partita in corso). Il
+     * client mostra l'errore e chiude la propria connessione.
+     */
+    void onNicknameRejected(String reason) throws RemoteException;
+
+    /** L'azione (in-gioco) del chiamante \u00e8 stata rifiutata dal server. */
     void onActionRejected(String reason) throws RemoteException;
 
-    /** Snapshot completo dello stato del gioco (per join iniziale o riconnessione). */
+    /** Snapshot completo dello stato del gioco (per join in lobby o riconnessione). */
     void onGameSnapshot(GameSnapshot snapshot) throws RemoteException;
+
+    /**
+     * Snapshot leggero della sola {@link Board}, mandato dal server
+     * prima di un evento {@code *Turn} che richiede al giocatore di
+     * scegliere su uno stato fresco della board (offering track,
+     * upper/lower row, turn order tile). A differenza di
+     * {@link #onGameSnapshot}, NON triggera un re-render della view:
+     * aggiorna in modo silenzioso il mini-stato locale della board,
+     * cos\u00ec il successivo {@code *Turn} ha la board pronta da
+     * stampare.
+     */
+    void onBoardSnapshot(Board board) throws RemoteException;
 
     /**
      * Heartbeat. Body vuoto: serve solo a verificare che il client

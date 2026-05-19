@@ -1,6 +1,7 @@
 package it.polimi.ingsw.common.wire;
 
 import it.polimi.ingsw.common.dto.GameSnapshot;
+import it.polimi.ingsw.model.Board;
 import it.polimi.ingsw.model.card.BuildingCard;
 import it.polimi.ingsw.model.card.CharacterCard;
 import it.polimi.ingsw.model.enums.Era;
@@ -29,6 +30,7 @@ public abstract class ServerToClientMessage implements Serializable {
         void visitAwaitPlayerCount(String firstPlayerNick);
         void visitPlayerCountSet(int count);
         void visitAwaitMorePlayers(int joined, int total);
+        void visitNicknameRejected(String reason);
         void visitColorTurn(String nick, Set<TotemColor> available);
         void visitColorPicked(String nick, TotemColor color);
         void visitMatchStarted(List<String> playerOrder, Era startingEra);
@@ -52,6 +54,7 @@ public abstract class ServerToClientMessage implements Serializable {
         void visitPlayerReconnected(String nick);
         void visitActionRejected(String reason);
         void visitGameSnapshot(GameSnapshot snapshot);
+        void visitBoardSnapshot(Board board);
     }
 
     // === classi nested (una per evento) ===
@@ -83,6 +86,13 @@ public abstract class ServerToClientMessage implements Serializable {
         private final int total;
         public AwaitMorePlayers(int joined, int total) { this.joined = joined; this.total = total; }
         @Override public void accept(Visitor v) { v.visitAwaitMorePlayers(joined, total); }
+    }
+
+    public static class NicknameRejected extends ServerToClientMessage {
+        private static final long serialVersionUID = 1L;
+        private final String reason;
+        public NicknameRejected(String reason) { this.reason = reason; }
+        @Override public void accept(Visitor v) { v.visitNicknameRejected(reason); }
     }
 
     public static class ColorTurn extends ServerToClientMessage {
@@ -274,5 +284,12 @@ public abstract class ServerToClientMessage implements Serializable {
         private final GameSnapshot snapshot;
         public GameSnapshotMsg(GameSnapshot snapshot) { this.snapshot = snapshot; }
         @Override public void accept(Visitor v) { v.visitGameSnapshot(snapshot); }
+    }
+
+    public static class BoardSnapshotMsg extends ServerToClientMessage {
+        private static final long serialVersionUID = 1L;
+        private final Board board;
+        public BoardSnapshotMsg(Board board) { this.board = board; }
+        @Override public void accept(Visitor v) { v.visitBoardSnapshot(board); }
     }
 }

@@ -4,6 +4,7 @@ import it.polimi.ingsw.common.VirtualServer;
 import it.polimi.ingsw.common.VirtualView;
 import it.polimi.ingsw.common.dto.GameSnapshot;
 import it.polimi.ingsw.controller.client.ClientController;
+import it.polimi.ingsw.model.Board;
 import it.polimi.ingsw.model.card.BuildingCard;
 import it.polimi.ingsw.model.card.CharacterCard;
 import it.polimi.ingsw.model.enums.Era;
@@ -176,8 +177,16 @@ public class Rmi_Client implements VirtualView {
         controller.actionRejected(reason);
     }
 
+    @Override public void onNicknameRejected(String reason) throws RemoteException {
+        controller.nicknameRejected(reason);
+    }
+
     @Override public void onGameSnapshot(GameSnapshot snapshot) throws RemoteException {
         controller.gameSnapshot(snapshot);
+    }
+
+    @Override public void onBoardSnapshot(Board board) throws RemoteException {
+        controller.boardSnapshot(board);
     }
 
     @Override public void ping() throws RemoteException {

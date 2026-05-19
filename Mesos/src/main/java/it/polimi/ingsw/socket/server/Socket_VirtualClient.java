@@ -3,6 +3,7 @@ package it.polimi.ingsw.socket.server;
 import it.polimi.ingsw.common.VirtualView;
 import it.polimi.ingsw.common.dto.GameSnapshot;
 import it.polimi.ingsw.common.wire.ServerToClientMessage;
+import it.polimi.ingsw.model.Board;
 import it.polimi.ingsw.model.card.BuildingCard;
 import it.polimi.ingsw.model.card.CharacterCard;
 import it.polimi.ingsw.model.enums.Era;
@@ -142,8 +143,16 @@ public class Socket_VirtualClient implements VirtualView {
         send(new ServerToClientMessage.ActionRejected(reason));
     }
 
+    @Override public void onNicknameRejected(String reason) throws RemoteException {
+        send(new ServerToClientMessage.NicknameRejected(reason));
+    }
+
     @Override public void onGameSnapshot(GameSnapshot snapshot) throws RemoteException {
         send(new ServerToClientMessage.GameSnapshotMsg(snapshot));
+    }
+
+    @Override public void onBoardSnapshot(Board board) throws RemoteException {
+        send(new ServerToClientMessage.BoardSnapshotMsg(board));
     }
 
     @Override public void ping() throws RemoteException {

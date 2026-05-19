@@ -66,6 +66,16 @@ public class ClientController {
     private int expectedPlayers;
     private List<String> finalLeaderboard;
     private List<String> finalWinners;
+    /**
+     * Errore lato server (es. "tile already occupied") in attesa di
+     * essere mostrato. Lo settiamo in {@link #actionRejected} senza
+     * stamparlo subito: il successivo evento *Turn far\u00e0
+     * {@code view.refresh(this)} che si occuper\u00e0 di stamparlo
+     * DOPO il dump dello stato (vedi {@code TuiView.refresh}).
+     * Cos\u00ec l'errore appare in fondo alla schermata, vicino al
+     * prompt, invece di essere "sopra" il game state aggiornato.
+     */
+    private String pendingError;
 
     /**
      * Latch one-shot che il main thread del client (Rmi_Client.run /
@@ -135,43 +145,59 @@ public class ClientController {
 
     // ====================================================================
     // Event handlers (chiamati da Rmi_Client / Socket_Client)
+    //
+    // Politica di stampa per evitare di duplicare il game-state dump:
+    //   - aggiorniamo SEMPRE il mini-stato per ogni evento
+    //   - view.refresh(this) viene chiamato SOLO quando \u00e8 il MIO turno
+    //     (subito prima del prompt) o per le transizioni importanti
+    //     (matchStarted, roundStarted, gameEnded, gameSnapshot)
+    //   - per gli altri eventi usiamo view.displayInfo("...") che stampa
+    //     una sola riga sintetica
     // ====================================================================
 
     public synchronized void playerJoined(String nick) {
         if (!joinedPlayers.contains(nick)) {
             joinedPlayers.add(nick);
         }
-        view.refresh(this);
+        view.displayInfo(nick + " joined the lobby");
     }
 
     public synchronized void awaitPlayerCount(String firstPlayerNick) {
         this.currentPlayer = firstPlayerNick;
-        view.refresh(this);
+        // Il primo player non riceve uno snapshot iniziale (vedi
+        // ServerController.acceptFirstPlayerJoin); senza snapshot non
+        // saprebbe di essere in lobby. Lo aggiungiamo manualmente qui.
+        if (!joinedPlayers.contains(firstPlayerNick)) {
+            joinedPlayers.add(firstPlayerNick);
+        }
         if (firstPlayerNick.equals(myNickname)) {
+            view.displayInfo("You are the first player. Pick the number of participants.");
             int count = view.promptPlayerCount();
             sendOrError(new SafeSend() {
                 @Override public void send() throws RemoteException {
                     virtualServer.setPlayerCount(myNickname, count);
                 }
             });
+        } else {
+            view.displayInfo("Waiting for " + firstPlayerNick + " to set the participant count");
         }
     }
 
     public synchronized void playerCountSet(int count) {
         this.expectedPlayers = count;
-        view.refresh(this);
+        view.displayInfo("Player count set to " + count);
     }
 
     public synchronized void awaitMorePlayers(int joined, int total) {
-        view.refresh(this);
+        view.displayInfo("Waiting for more players (" + joined + "/" + total + ")");
     }
 
     public synchronized void colorTurn(String nick, Set<TotemColor> available) {
         this.currentPhase = Phase.COLOR_PICKING;
         this.currentPlayer = nick;
         this.availableColors = new HashSet<>(available);
-        view.refresh(this);
         if (nick.equals(myNickname)) {
+            view.refresh(this);
             TotemColor color = view.promptColor(new HashSet<>(available));
             final TotemColor c = color;
             sendOrError(new SafeSend() {
@@ -179,35 +205,42 @@ public class ClientController {
                     virtualServer.pickColor(myNickname, c);
                 }
             });
+        } else {
+            view.displayInfo("Waiting for " + nick + " to pick a color");
         }
     }
 
     public synchronized void colorPicked(String nick, TotemColor color) {
         colorsByPlayer.put(nick, color);
         availableColors.remove(color);
-        view.refresh(this);
+        view.displayInfo(nick + " picked " + color);
     }
 
     public synchronized void matchStarted(List<String> playerOrder, Era era) {
         this.currentEra = era;
-        view.refresh(this);
+        // Niente view.refresh(this) qui: il *Turn event che segue
+        // (es. onOfferingTileTurn) far\u00e0 lui il dump dello stato
+        // con la fase corretta (PICK_OFFERING_TILE) e la board che
+        // arriva via onBoardSnapshot. Cos\u00ec evitiamo un dump
+        // intermedio con phase ancora COLOR_PICKING.
+        view.displayInfo("MATCH STARTED. Era: " + era + ". Order: " + playerOrder);
     }
 
     public synchronized void eraChanged(Era newEra) {
         this.currentEra = newEra;
-        view.refresh(this);
+        view.displayInfo("Era changed to " + newEra);
     }
 
     public synchronized void roundStarted(int round) {
         this.currentRound = round;
-        view.refresh(this);
+        view.displayInfo("Round " + round + " started");
     }
 
     public synchronized void offeringTileTurn(String nick, int trackSize) {
         this.currentPhase = Phase.PICK_OFFERING_TILE;
         this.currentPlayer = nick;
-        view.refresh(this);
         if (nick.equals(myNickname)) {
+            view.refresh(this);
             int idx = view.promptOfferingTile(trackSize);
             final int finalIdx = idx;
             sendOrError(new SafeSend() {
@@ -215,10 +248,19 @@ public class ClientController {
                     virtualServer.pickOfferingTile(myNickname, finalIdx);
                 }
             });
+        } else {
+            view.displayInfo("Waiting for " + nick + " to place a totem on the offering track");
         }
     }
 
     public synchronized void offeringTilePicked(String nick, int tileIndex) {
+        view.displayInfo(nick + " placed a totem on offering tile " + tileIndex);
+        // Refresh: il server ha appena mandato un onBoardSnapshot
+        // bundle-ato con questo evento, quindi currentBoard riflette
+        // gi\u00e0 la track con il totem appena piazzato. Un dump qui
+        // permette a chi non \u00e8 il prossimo picker di vedere
+        // l'aggiornamento (chi \u00e8 il prossimo picker lo vedr\u00e0
+        // comunque nel suo onOfferingTileTurn).
         view.refresh(this);
     }
 
@@ -227,8 +269,8 @@ public class ClientController {
         this.currentPlayer = nick;
         this.currentUpperBudget = upperBudget;
         this.currentLowerBudget = lowerBudget;
-        view.refresh(this);
         if (nick.equals(myNickname)) {
+            view.refresh(this);
             final List<Integer> upper = view.promptCharacterUpperIds(upperBudget);
             final List<Integer> lower = view.promptCharacterLowerIds(lowerBudget);
             sendOrError(new SafeSend() {
@@ -236,6 +278,9 @@ public class ClientController {
                     virtualServer.pickCharacterCards(myNickname, upper, lower);
                 }
             });
+        } else {
+            view.displayInfo("Waiting for " + nick + " to pick character cards (upper="
+                    + upperBudget + ", lower=" + lowerBudget + ")");
         }
     }
 
@@ -249,7 +294,18 @@ public class ClientController {
         }
         hand.addAll(upper);
         hand.addAll(lower);
-        view.refresh(this);
+        int total = upper.size() + lower.size();
+        view.displayInfo(nick + " drew " + total + " character card(s)");
+        // Refresh solo se NON sono io il picker: il server ha bundle-ato
+        // questo evento con il successivo onBuildingPickTurn(me) che
+        // far\u00e0 lui il refresh con la fase aggiornata
+        // (TURN_PICK_CARDS_BUILDING) e la mano gi\u00e0 piena. Se
+        // refreshassi anche qui vedrei un dump intermedio con la fase
+        // ancora TURN_PICK_CARDS_CHARACTER, immediatamente sostituito
+        // dal dump corretto del *Turn.
+        if (!nick.equals(myNickname)) {
+            view.refresh(this);
+        }
     }
 
     public synchronized void buildingPickTurn(String nick, int upperRemaining, int lowerRemaining) {
@@ -257,8 +313,8 @@ public class ClientController {
         this.currentPlayer = nick;
         this.currentUpperRemaining = upperRemaining;
         this.currentLowerRemaining = lowerRemaining;
-        view.refresh(this);
         if (nick.equals(myNickname)) {
+            view.refresh(this);
             final List<Integer> upper = view.promptBuildingUpperIds(upperRemaining);
             final List<Integer> lower = view.promptBuildingLowerIds(lowerRemaining);
             sendOrError(new SafeSend() {
@@ -266,6 +322,9 @@ public class ClientController {
                     virtualServer.pickBuildingCards(myNickname, upper, lower);
                 }
             });
+        } else {
+            view.displayInfo("Waiting for " + nick + " to buy buildings (residual upper="
+                    + upperRemaining + ", lower=" + lowerRemaining + ")");
         }
     }
 
@@ -279,14 +338,16 @@ public class ClientController {
         }
         owned.addAll(upper);
         owned.addAll(lower);
+        int total = upper.size() + lower.size();
+        view.displayInfo(nick + " bought " + total + " building(s)");
         view.refresh(this);
     }
 
     public synchronized void extraPickTurn(String nick) {
         this.currentPhase = Phase.RESET_TURN_ORDER_AND_PICK_EXTRA_BUILDING;
         this.currentPlayer = nick;
-        view.refresh(this);
         if (nick.equals(myNickname)) {
+            view.refresh(this);
             View.ExtraPickChoice choice = view.promptExtraCard();
             final Integer id = choice.cardId;
             final boolean isChar = choice.isCharacter;
@@ -295,25 +356,33 @@ public class ClientController {
                     virtualServer.pickExtraCard(myNickname, id, isChar);
                 }
             });
+        } else {
+            view.displayInfo(nick + " has the extra pick (special building bonus)");
         }
     }
 
     public synchronized void extraCardPicked(String nick, Integer cardId, boolean isCharacter) {
+        if (cardId == null) {
+            view.displayInfo(nick + " skipped the extra pick");
+        } else {
+            view.displayInfo(nick + " did extra pick: "
+                    + (isCharacter ? "character" : "building") + " id=" + cardId);
+        }
         view.refresh(this);
     }
 
     public synchronized void prestigeChanged(String nick, int newPrestige) {
         prestige.put(nick, newPrestige);
-        view.refresh(this);
+        view.displayInfo(nick + " prestige -> " + newPrestige);
     }
 
     public synchronized void foodChanged(String nick, int newFood) {
         food.put(nick, newFood);
-        view.refresh(this);
+        view.displayInfo(nick + " food -> " + newFood);
     }
 
     public synchronized void roundEnded() {
-        view.refresh(this);
+        view.displayInfo("Round ended");
     }
 
     public synchronized void gameEnded(List<String> leaderboard, List<String> winners) {
@@ -329,27 +398,63 @@ public class ClientController {
 
     public synchronized void matchPaused(String reason) {
         this.currentPhase = Phase.PAUSED_WAITING_RECONNECT;
-        view.refresh(this);
         view.displayInfo("Match paused: " + reason);
     }
 
     public synchronized void matchResumed() {
-        view.refresh(this);
         view.displayInfo("Match resumed.");
     }
 
     public synchronized void playerDisconnected(String nick) {
-        view.refresh(this);
         view.displayInfo(nick + " disconnected.");
     }
 
     public synchronized void playerReconnected(String nick) {
-        view.refresh(this);
         view.displayInfo(nick + " reconnected.");
     }
 
     public synchronized void actionRejected(String reason) {
+        // Solo store: l'errore viene stampato dal prossimo refresh,
+        // dopo il dump dello stato e prima del prompt. Vedi
+        // {@link #consumePendingError()} e TuiView.refresh.
+        this.pendingError = reason;
+    }
+
+    /**
+     * Letto e azzerato dalla view in fondo a {@code refresh}: se
+     * non-null, la view stampa il box d'errore subito dopo il
+     * delimitatore di chiusura del game state, cos\u00ec l'utente lo
+     * vede a ridosso del prompt.
+     */
+    public synchronized String consumePendingError() {
+        String e = this.pendingError;
+        this.pendingError = null;
+        return e;
+    }
+
+    /**
+     * Il connect del client \u00e8 stato rifiutato dal server. Mostriamo
+     * l'errore e chiudiamo la connessione: triggeriamo il latch di
+     * fine sessione cos\u00ec che il main thread esca da
+     * {@link #awaitGameEnd} e proceda al cleanup (disconnect +
+     * unexport per RMI, chiusura socket per socket).
+     */
+    public synchronized void nicknameRejected(String reason) {
         view.displayError(reason);
+        view.displayInfo("Closing connection.");
+        endLatch.countDown();
+    }
+
+    /**
+     * Aggiorna in modo silenzioso il mini-stato della board (offering
+     * track, upper/lower row, turn order tile) con quello arrivato
+     * dal server. NON fa view.refresh(): il dump completo lo fa il
+     * successivo evento {@code *Turn} che segue il broadcast della
+     * board nel server controller. Cos\u00ec il render del game
+     * state arriva con la fase corretta e la board fresca.
+     */
+    public synchronized void boardSnapshot(Board board) {
+        this.currentBoard = board;
     }
 
     /**

@@ -232,6 +232,10 @@ public class ServerController {
      * data, e SUBITO DOPO re-invia il {@code *Turn} corrente cos\u00ec
      * il client non resta appeso senza prompt. La logica del re-invio
      * \u00e8 polimorfica su {@link PhaseLogic}.
+     *
+     * Usato per rifiutare AZIONI di gioco (es. pickColor su una fase
+     * sbagliata). Per rifiutare un tentativo di connect usa invece
+     * {@link #rejectNickname}.
      */
     void rejectAction(String nick, final String reason) {
         sendToNickname(nick, new ViewCall() {
@@ -240,6 +244,19 @@ public class ServerController {
             }
         });
         phase.emitCurrentTurnTo(this, nick);
+    }
+
+    /**
+     * Manda al chiamante un {@code onNicknameRejected} con la ragione
+     * data. Triggera sul client il re-prompt del nickname, cos\u00ec
+     * l'utente pu\u00f2 ritentare (con stesso o nuovo nickname).
+     */
+    void rejectNickname(String nick, final String reason) {
+        sendToNickname(nick, new ViewCall() {
+            @Override public void apply(VirtualView v) throws RemoteException {
+                v.onNicknameRejected(reason);
+            }
+        });
     }
 
     /** Costruisce il GameSnapshot corrente per i join / reconnect. */
@@ -292,7 +309,7 @@ public class ServerController {
     void acceptFirstPlayerJoin(final String nick, VirtualView view) {
         String error = validateNicknameSyntax(nick);
         if (error != null) {
-            rejectAction(nick, error);
+            rejectNickname(nick, error);
             return;
         }
         joinedNicknames.add(nick);
@@ -300,13 +317,9 @@ public class ServerController {
         currentPlayerNickname = nick;
         phase = new PhaseLogic.WaitingForPlayerCount();
 
-        // Snapshot al nuovo arrivato + avviso "tocca a te scegliere il count"
-        final GameSnapshot snap = buildSnapshot();
-        sendToNickname(nick, new ViewCall() {
-            @Override public void apply(VirtualView v) throws RemoteException {
-                v.onGameSnapshot(snap);
-            }
-        });
+        // Niente snapshot al primo player (vedi GameSnapshot javadoc):
+        // basta dirgli "tocca a te scegliere il count". Il client
+        // aggiunge sa stesso ai joinedPlayers in awaitPlayerCount.
         broadcast(new ViewCall() {
             @Override public void apply(VirtualView v) throws RemoteException {
                 v.onAwaitPlayerCount(nick);
@@ -352,31 +365,49 @@ public class ServerController {
     void acceptAdditionalPlayerJoin(final String nick, VirtualView view) {
         String error = validateNicknameSyntax(nick);
         if (error != null) {
-            rejectAction(nick, error);
+            rejectNickname(nick, error);
             return;
         }
         if (joinedNicknames.contains(nick)) {
-            rejectAction(nick, "nickname already in use");
+            rejectNickname(nick, "nickname already in use");
             return;
         }
         joinedNicknames.add(nick);
-        // Snapshot al nuovo arrivato
-        final GameSnapshot snap = buildSnapshot();
-        sendToNickname(nick, new ViewCall() {
-            @Override public void apply(VirtualView v) throws RemoteException {
-                v.onGameSnapshot(snap);
-            }
-        });
-        // Annuncio a tutti gli altri
+        // Annuncio a tutti gli altri (il joiner non riceve onPlayerJoined
+        // di se stesso: lo apprende dallo snapshot pi\u00f9 sotto).
         broadcastExcept(nick, new ViewCall() {
             @Override public void apply(VirtualView v) throws RemoteException {
                 v.onPlayerJoined(nick);
             }
         });
-        // Lobby piena? Entriamo in color picking.
         if (joinedNicknames.size() == expectedPlayers) {
+            // Lobby piena: facciamo PRIMA la transizione a COLOR_PICKING
+            // (che broadcasta onColorTurn(firstPicker) a tutti, incluso
+            // il nuovo joiner), e SOLO DOPO costruiamo lo snapshot per
+            // il joiner. Cos\u00ec lo snapshot riflette la fase nuova
+            // (COLOR_PICKING) e il primo color picker, invece di una
+            // WAITING_FOR_PLAYERS / turn=null che era valida solo per
+            // qualche microsecondo. Il joiner vede:
+            //   [INFO] Waiting for X to pick a color   (da onColorTurn)
+            //   === GAME STATE === phase: COLOR_PICKING turn: X (da snapshot)
+            // invece del precedente dump stale di WAITING_FOR_PLAYERS.
             enterColorPicking();
+            final GameSnapshot snapAfter = buildSnapshot();
+            sendToNickname(nick, new ViewCall() {
+                @Override public void apply(VirtualView v) throws RemoteException {
+                    v.onGameSnapshot(snapAfter);
+                }
+            });
         } else {
+            // Lobby ancora incompleta: lo snapshot WAITING_FOR_PLAYERS
+            // \u00e8 corretto, lo mandiamo al joiner e poi notifichiamo
+            // a tutti il nuovo conteggio.
+            final GameSnapshot snap = buildSnapshot();
+            sendToNickname(nick, new ViewCall() {
+                @Override public void apply(VirtualView v) throws RemoteException {
+                    v.onGameSnapshot(snap);
+                }
+            });
             final int joined = joinedNicknames.size();
             final int total = expectedPlayers;
             broadcast(new ViewCall() {
@@ -522,8 +553,16 @@ public class ServerController {
             rejectAction(nick, "internal error: moveTotem failed");
             return;
         }
+        // Bundle: prima manda la board aggiornata, poi notifica il
+        // pick. Cos\u00ec il client refresh-a (vedi
+        // ClientController.offeringTilePicked) con la track gi\u00e0
+        // contenente il totem appena piazzato. Senza il bundle il
+        // refresh userebbe la board "pre-pick" mandata col precedente
+        // onOfferingTileTurn.
+        final Board board = match.getBoard();
         broadcast(new ViewCall() {
             @Override public void apply(VirtualView v) throws RemoteException {
+                v.onBoardSnapshot(board);
                 v.onOfferingTilePicked(nick, tileIndex);
             }
         });
@@ -539,8 +578,15 @@ public class ServerController {
                 currentPlayerNickname = nick;
                 final String fNick = nick;
                 final int trackSize = match.getBoard().getOfferingTrack().size();
+                final Board board = match.getBoard();
+                // Bundle: board snapshot + *Turn nello stesso ViewCall,
+                // cos\u00ec arrivano in ordine sullo stesso thread RMI
+                // (e nello stesso writeObject su socket). Senza bundle,
+                // due broadcast separate spawnerebbero due thread RMI
+                // distinti per client, con possibile riordino.
                 broadcast(new ViewCall() {
                     @Override public void apply(VirtualView v) throws RemoteException {
+                        v.onBoardSnapshot(board);
                         v.onOfferingTileTurn(fNick, trackSize);
                     }
                 });
@@ -594,13 +640,15 @@ public class ServerController {
         final int upper = currentUpperBudget;
         final int lower = currentLowerBudget;
         final int newFood = p.getFood();
+        final Board board = match.getBoard();
+        // Bundle: food change + board snapshot + character pick turn
+        // in un unico ViewCall. Senza il bundle, su RMI il
+        // characterPickTurn potrebbe vincere la race contro il
+        // foodChanged e refreshare con il food vecchio.
         broadcast(new ViewCall() {
             @Override public void apply(VirtualView v) throws RemoteException {
                 v.onFoodChanged(nick, newFood);
-            }
-        });
-        broadcast(new ViewCall() {
-            @Override public void apply(VirtualView v) throws RemoteException {
+                v.onBoardSnapshot(board);
                 v.onCharacterPickTurn(nick, upper, lower);
             }
         });
@@ -661,16 +709,22 @@ public class ServerController {
 
         final List<CharacterCard> finalUpper = foundUpper;
         final List<CharacterCard> finalLower = foundLower;
-        broadcast(new ViewCall() {
-            @Override public void apply(VirtualView v) throws RemoteException {
-                v.onCharacterCardsPicked(nick, finalUpper, finalLower);
-            }
-        });
         phase = new PhaseLogic.TurnPickCardsBuilding();
         final int uRem = currentUpperRemainingForBuilding;
         final int lRem = currentLowerRemainingForBuilding;
+        final Board boardAfterCharPick = match.getBoard();
+        // Bundle critico: i tre callback (board snapshot + cards picked
+        // + next *Turn) DEVONO arrivare al client in ordine e sullo
+        // stesso thread. Se li mandassimo in due broadcast separate,
+        // Server.send spawnerebbe due thread RMI per client e il
+        // secondo (onBuildingPickTurn) potrebbe vincere la race,
+        // facendo refresh con la fase nuova ma con la mano ancora
+        // vuota (la mano viene aggiornata da onCharacterCardsPicked,
+        // che resterebbe in coda dietro al prompt dei building).
         broadcast(new ViewCall() {
             @Override public void apply(VirtualView v) throws RemoteException {
+                v.onBoardSnapshot(boardAfterCharPick);
+                v.onCharacterCardsPicked(nick, finalUpper, finalLower);
                 v.onBuildingPickTurn(nick, uRem, lRem);
             }
         });
@@ -739,14 +793,16 @@ public class ServerController {
 
         final List<BuildingCard> finalUpper = foundUpper;
         final List<BuildingCard> finalLower = foundLower;
-        broadcast(new ViewCall() {
-            @Override public void apply(VirtualView v) throws RemoteException {
-                v.onBuildingCardsBought(nick, finalUpper, finalLower);
-            }
-        });
+        final Board boardAfterBuild = match.getBoard();
         final int newFood = player.getFood();
+        // Bundle: board snapshot + cards bought + food change in un
+        // unico ViewCall, cos\u00ec sui client RMI arrivano in ordine
+        // e l'eventuale refresh post-evento vede gi\u00e0 sia la riga
+        // delle buildings che il food aggiornato.
         broadcast(new ViewCall() {
             @Override public void apply(VirtualView v) throws RemoteException {
+                v.onBoardSnapshot(boardAfterBuild);
+                v.onBuildingCardsBought(nick, finalUpper, finalLower);
                 v.onFoodChanged(nick, newFood);
             }
         });
@@ -790,8 +846,10 @@ public class ServerController {
         currentPlayerNickname = extraPickPlayer.getNickname();
         phase = new PhaseLogic.ResetTurnOrderAndPickExtraBuilding();
         final String nick = currentPlayerNickname;
+        final Board board = match.getBoard();
         broadcast(new ViewCall() {
             @Override public void apply(VirtualView v) throws RemoteException {
+                v.onBoardSnapshot(board);
                 v.onExtraPickTurn(nick);
             }
         });
@@ -878,8 +936,10 @@ public class ServerController {
                 }
             });
         }
+        final Board boardAfterExtra = match.getBoard();
         broadcast(new ViewCall() {
             @Override public void apply(VirtualView v) throws RemoteException {
+                v.onBoardSnapshot(boardAfterExtra);
                 v.onExtraCardPicked(nick, cardId, isCharacter);
             }
         });
@@ -1006,18 +1066,28 @@ public class ServerController {
         if (!server.unregisterIfPresent(nick)) {
             return;
         }
-        // Caso lobby: rimuovi davvero il giocatore.
+
+        boolean wasJoined;
         if (match == null) {
-            joinedNicknames.remove(nick);
+            wasJoined = joinedNicknames.remove(nick);
             if (nick.equals(firstPlayerNickname)) {
                 firstPlayerNickname = joinedNicknames.isEmpty() ? null : joinedNicknames.get(0);
             }
-            // Se la lobby \u00e8 vuota, reset completo.
             if (joinedNicknames.isEmpty()) {
                 resetToLobby();
                 return;
             }
+        } else {
+            wasJoined = joinedNicknames.contains(nick);
         }
+
+        // Se il client non era ufficialmente in lobby/match (es. era
+        // stato rifiutato al connect), non c'\u00e8 nessuno da
+        // informare della sua disconnessione.
+        if (!wasJoined) {
+            return;
+        }
+
         broadcast(new ViewCall() {
             @Override public void apply(VirtualView v) throws RemoteException {
                 v.onPlayerDisconnected(nick);
@@ -1154,8 +1224,10 @@ public class ServerController {
         if (currentPlayerNickname == null || match == null) return;
         final String current = currentPlayerNickname;
         final int trackSize = match.getBoard().getOfferingTrack().size();
+        final Board board = match.getBoard();
         sendToNickname(nick, new ViewCall() {
             @Override public void apply(VirtualView v) throws RemoteException {
+                v.onBoardSnapshot(board);
                 v.onOfferingTileTurn(current, trackSize);
             }
         });
@@ -1167,8 +1239,10 @@ public class ServerController {
         final String current = currentPlayerNickname;
         final int upper = currentUpperBudget;
         final int lower = currentLowerBudget;
+        final Board board = match != null ? match.getBoard() : null;
         sendToNickname(nick, new ViewCall() {
             @Override public void apply(VirtualView v) throws RemoteException {
+                if (board != null) v.onBoardSnapshot(board);
                 v.onCharacterPickTurn(current, upper, lower);
             }
         });
@@ -1180,8 +1254,10 @@ public class ServerController {
         final String current = currentPlayerNickname;
         final int upperRem = currentUpperRemainingForBuilding;
         final int lowerRem = currentLowerRemainingForBuilding;
+        final Board board = match != null ? match.getBoard() : null;
         sendToNickname(nick, new ViewCall() {
             @Override public void apply(VirtualView v) throws RemoteException {
+                if (board != null) v.onBoardSnapshot(board);
                 v.onBuildingPickTurn(current, upperRem, lowerRem);
             }
         });
@@ -1191,8 +1267,10 @@ public class ServerController {
     void sendExtraPickTurnTo(String nick) {
         if (currentPlayerNickname == null) return;
         final String current = currentPlayerNickname;
+        final Board board = match != null ? match.getBoard() : null;
         sendToNickname(nick, new ViewCall() {
             @Override public void apply(VirtualView v) throws RemoteException {
+                if (board != null) v.onBoardSnapshot(board);
                 v.onExtraPickTurn(current);
             }
         });

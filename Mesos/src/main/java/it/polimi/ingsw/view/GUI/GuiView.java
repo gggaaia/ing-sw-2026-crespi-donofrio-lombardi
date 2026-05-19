@@ -1,8 +1,8 @@
 package it.polimi.ingsw.view.GUI;
 
 import it.polimi.ingsw.controller.client.ClientController;
-import it.polimi.ingsw.model.enums.TotemColor;
 import it.polimi.ingsw.view.View;
+import it.polimi.ingsw.model.enums.TotemColor;
 
 import java.util.List;
 import java.util.Set;
@@ -76,7 +76,7 @@ public class GuiView implements View {
     }
 
     @Override
-    public View.ExtraPickChoice promptExtraCard() {
+    public ExtraPickChoice promptExtraCard() {
         throw new UnsupportedOperationException("GuiView.promptExtraCard not implemented");
     }
 }

@@ -3,6 +3,7 @@ package it.polimi.ingsw.socket.client;
 import it.polimi.ingsw.common.dto.GameSnapshot;
 import it.polimi.ingsw.common.wire.ServerToClientMessage;
 import it.polimi.ingsw.controller.client.ClientController;
+import it.polimi.ingsw.model.Board;
 import it.polimi.ingsw.model.card.BuildingCard;
 import it.polimi.ingsw.model.card.CharacterCard;
 import it.polimi.ingsw.model.enums.Era;
@@ -204,7 +205,15 @@ public class Socket_Client implements ServerToClientMessage.Visitor {
         controller.actionRejected(reason);
     }
 
+    @Override public void visitNicknameRejected(String reason) {
+        controller.nicknameRejected(reason);
+    }
+
     @Override public void visitGameSnapshot(GameSnapshot snapshot) {
         controller.gameSnapshot(snapshot);
+    }
+
+    @Override public void visitBoardSnapshot(Board board) {
+        controller.boardSnapshot(board);
     }
 }

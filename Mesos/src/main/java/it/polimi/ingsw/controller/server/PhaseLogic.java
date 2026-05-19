@@ -47,7 +47,10 @@ public abstract class PhaseLogic {
     // === default: tutte le azioni rifiutate ===
 
     public void onConnect(ServerController c, String nick, VirtualView view) {
-        c.rejectAction(nick, "cannot join right now");
+        // I rifiuti durante un tentativo di connect usano onNicknameRejected:
+        // il client mostra l'errore e fa partire un re-prompt cos\u00ec
+        // l'utente pu\u00f2 ritentare (con stesso o nuovo nickname).
+        c.rejectNickname(nick, "cannot join right now");
     }
 
     public void onDisconnect(ServerController c, String nick) {
@@ -142,8 +145,10 @@ public abstract class PhaseLogic {
         public WaitingForPlayerCount() { super(Phase.WAITING_FOR_PLAYER_COUNT); }
         @Override
         public void onConnect(ServerController c, String nick, VirtualView view) {
-            // Eventuali altri non sono ammessi finch\u00e9 non \u00e8 fissato il numero.
-            c.rejectAction(nick, "wait for the first player to set the participant count");
+            // Nessuna partita sta accettando giocatori finch\u00e9 il
+            // primo player non ha scelto il count: rifiutiamo subito,
+            // il client mostra l'errore e chiude la connessione.
+            c.rejectNickname(nick, "no game currently accepting players");
         }
 
         @Override
