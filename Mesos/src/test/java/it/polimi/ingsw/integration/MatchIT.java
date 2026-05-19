@@ -75,8 +75,16 @@ class MatchIT {
         // Check Lower Row (Events/Characters)
         CardRow lowerRow = board.getLowerRow();
         assertNotNull(lowerRow, "Lower row must be initialized");
-        assertFalse(lowerRow.getEventCards().isEmpty(), "Lower row should be populated with event cards drawn from the deck");
 
+        // Rule verification: The lower row must contain ONLY characters after setup
+        assertFalse(lowerRow.getCharacterCards().isEmpty(),
+                "Lower row should be populated with character cards right after the setup");
+
+        // Ensure no other card types are present in the lower row at the start
+        assertTrue(lowerRow.getEventCards().isEmpty(),
+                "Lower row should be completely empty of event cards during the initial setup");
+        assertTrue(lowerRow.getBuildingCards().isEmpty(),
+                "Lower row should be completely empty of building cards during the initial setup");
         // Check Totem Placement
         boolean atLeastOneTotemPlaced = false;
         for (TurnOrderSlot slot : turnOrderSlots) {
