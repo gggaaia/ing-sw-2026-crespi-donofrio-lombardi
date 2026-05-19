@@ -7,6 +7,7 @@ public class RitualStarBonus extends EventActivatedBuilding{
     public RitualStarBonus(int cardID, Era era, int minPlayers, int foodCost, int endOfGamePP, Player owner) {
         super(cardID, era, minPlayers, foodCost, endOfGamePP,  owner);
     }
+    //implementation grant the ability to do a rollback easily during the card picking phase
     public int applyStarBonus(Player player) {
         return (player==getOwner()? 3 : 0);
     }

@@ -4,8 +4,6 @@ import it.polimi.ingsw.model.card.BuildingCard;
 import it.polimi.ingsw.model.card.CharacterCard;
 import it.polimi.ingsw.model.enums.InventorIcon;
 import it.polimi.ingsw.model.enums.TotemColor;
-import it.polimi.ingsw.model.state.NotPlaying;
-import it.polimi.ingsw.model.state.PlayerState;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -36,7 +34,6 @@ public class Player implements Serializable {
     private int InventorPairs;
     private List<CharacterCard> playerHand;
     private List<BuildingCard> playerBuildings;
-    private PlayerState playerState;
 
     /**
      * Constructs a new Player with the specified nickname and totem color.
@@ -66,7 +63,6 @@ public class Player implements Serializable {
         this.hasBuilding = false;
         this.playerHand = new ArrayList<>();
         this.playerBuildings = new ArrayList<>();
-        this.playerState = new NotPlaying();
     }
 
     /**
@@ -223,15 +219,6 @@ public class Player implements Serializable {
     }
     public void increaseInventorPairs(int amount) {this.InventorPairs += amount;}
 
-    /**
-     * Updates the current state of the player during the match.
-     *
-     * @param newState the new PlayerState to assign to the player
-     */
-    public void setPlayerState(PlayerState newState) {
-        this.playerState = newState;
-    }
-
     public String getNickname() {
         return nickname;
     }
@@ -248,9 +235,6 @@ public class Player implements Serializable {
         return food;
     }
 
-    public PlayerState getPlayerState() {
-        return playerState;
-    }
 
     public boolean hasBuilding() {
         return hasBuilding;

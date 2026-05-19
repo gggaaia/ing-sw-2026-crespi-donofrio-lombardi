@@ -1,5 +1,6 @@
-package it.polimi.ingsw.model;
+package it.polimi.ingsw.model.building;
 
+import it.polimi.ingsw.model.Player;
 import it.polimi.ingsw.model.card.building.InventorPair;
 import it.polimi.ingsw.model.enums.Era;
 import org.junit.jupiter.api.DisplayName;
@@ -7,11 +8,29 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+/**
+ * Test class for the {@link InventorPair} building card.
+ * <p>
+ * Verifies the end-of-round effect associated with this card, which rewards
+ * the owner with food based on the number of new inventor pairs they have
+ * collected. The tests ensure that only the rightful owner receives the
+ * reward, and that pairs scored in previous rounds are correctly tracked
+ * and excluded from subsequent payouts.
+ */
 class InventorPairTest {
 
-    // Helper method to create a custom Player instance.
-    // This allows us to control exactly how many total pairs the player has
-    // without relying on the internal implementation of how cards are added to the hand.
+    /**
+     * Helper method to create a custom Player instance for testing.
+     * <p>
+     * Overrides the default behavior to explicitly control the total number
+     * of inventor pairs the player possesses, allowing for isolated testing
+     * of the reward logic without managing the complexities of a full card hand.
+     *
+     * @param name                 the nickname of the dummy player
+     * @param totalPairs           the simulated total number of inventor pairs the player has
+     * @param alreadyRecordedPairs the simulated number of pairs already scored in previous rounds
+     * @return a mock {@link Player} configured for specific test scenarios
+     */
     private Player createHelperPlayer(String name, int totalPairs, int alreadyRecordedPairs) {
         Player p = new Player(name, null) {
             @Override
@@ -28,6 +47,11 @@ class InventorPairTest {
         return p;
     }
 
+    /**
+     * Verifies the ownership check. Ensures that if the effect is triggered
+     * on a player who is not the designated owner of the card, no action is
+     * taken, and neither food nor tracked pairs are modified.
+     */
     @Test
     @DisplayName("Effect does not trigger if the player is not the card owner")
     void testApplyEndRoundEffect_NotOwner() {
@@ -44,6 +68,12 @@ class InventorPairTest {
         assertEquals(0, nonOwner.getInventorPairs());
     }
 
+    /**
+     * Verifies the standard reward calculation for the card owner. Ensures
+     * that the owner receives the correct amount of food
+     * and that these newly discovered pairs are properly registered to
+     * prevent double-scoring in the future.
+     */
     @Test
     @DisplayName("Owner gets 3 food per new pair and records them")
     void testApplyEndRoundEffect_Owner_NewPairs() {
@@ -59,6 +89,11 @@ class InventorPairTest {
         assertEquals(2, owner.getInventorPairs());
     }
 
+    /**
+     * Verifies the tracking mechanism for existing pairs. If a player triggers
+     * the effect but has not acquired any new pairs since the last activation,
+     * they should receive zero food and their tracked pair count must remain stable.
+     */
     @Test
     @DisplayName("Owner ignores already recorded pairs from previous rounds")
     void testApplyEndRoundEffect_Owner_AlreadyRecordedPairs() {
@@ -74,6 +109,12 @@ class InventorPairTest {
         assertEquals(2, owner.getInventorPairs());
     }
 
+    /**
+     * Verifies the differential reward calculation. If the owner has a mix
+     * of previously recorded pairs and newly acquired pairs, they must only
+     * be rewarded for the new ones, while the total tracking count is
+     * subsequently updated.
+     */
     @Test
     @DisplayName("Owner gets food ONLY for newly formed pairs, ignoring old ones")
     void testApplyEndRoundEffect_Owner_MixedPairs() {

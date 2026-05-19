@@ -6,9 +6,6 @@ import it.polimi.ingsw.model.card.BuildingCard;
 import it.polimi.ingsw.model.card.EventCard;
 import it.polimi.ingsw.model.enums.Era;
 import it.polimi.ingsw.model.enums.TotemColor;
-import it.polimi.ingsw.model.state.LobbyState;
-import it.polimi.ingsw.model.state.MatchState;
-
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Date;
@@ -33,7 +30,6 @@ public class Match implements Serializable {
     public static final int FINAL_ROUND = 11;
 
     private final int matchID;
-    private MatchState status = new LobbyState();
     private final Date date = new Date();
     private final List<Player> playersList = new ArrayList<>();
     private int currentRound = 0;
@@ -114,6 +110,17 @@ public class Match implements Serializable {
      */
     public Era getCurrentEra() {
         return currentEra;
+    }
+
+    /**
+     * Returns the date and time when this match was created.
+     * A defensive copy is returned to prevent external modifications
+     * to the internal state of the Match.
+     *
+     * @return the creation date of the match
+     */
+    public Date getDate() {
+        return new Date(date.getTime());
     }
 
     /**
@@ -319,20 +326,6 @@ public class Match implements Serializable {
         return false;
     }
 
-    public void chooseOfferingTrackPhase() {
-    }
-
-    public void resolveAllOfferingTilesEffect() {
-        List<TotemColor> PlayerTurnOrder = board.getTotemColorTurnOrder();
-
-        //get the player order and status
-        //ask the tile how much food to give the player and does it, ask how many top cards, how many bottom cards to get
-        //receive the index of the card the player want, add the card to the player hand, repeat for the number of card needed
-        //ask the player if it wants to buy a building
-        //cycle to new player
-        //when all player are finished it cycle the player hand calling the DrawingUpperRow method if there are more than 0 cards
-        //in the upper row
-    }
 
     public void resolveEndMatch() {
         for (Player player : playersList) {
@@ -425,21 +418,6 @@ public class Match implements Serializable {
                 }
             }
         }
-    }
-
-    public void startRound() {
-
-        // TODO: implement the logic of the startRound() method
-
-        // movetoNextRoundi)
-
-        // chooseOfferingTrackPhase():
-        
-        // resolveAllOfferinaTilesEffect():
-
-        // resolveEvents():
-
-        // resolveBuildings():
     }
 
 
