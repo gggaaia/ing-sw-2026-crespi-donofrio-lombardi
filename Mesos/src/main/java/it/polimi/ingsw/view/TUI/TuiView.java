@@ -1,4 +1,4 @@
-package it.polimi.ingsw.view;
+package it.polimi.ingsw.view.TUI;
 
 import it.polimi.ingsw.common.dto.ActionResultDto;
 import it.polimi.ingsw.common.dto.GameStateDto;
@@ -12,6 +12,7 @@ import it.polimi.ingsw.model.card.Card;
 import it.polimi.ingsw.model.card.CharacterCard;
 import it.polimi.ingsw.model.card.EventCard;
 import it.polimi.ingsw.model.enums.TotemColor;
+import it.polimi.ingsw.view.View;
 
 import java.util.List;
 import java.util.Map;
@@ -51,6 +52,9 @@ import java.util.Scanner;
 public class TuiView implements View {
 
     private final Scanner scan = new Scanner(System.in);
+    public static final String BLUE = "\u001B[34m";
+    public static final String RESET = "\u001B[0m";
+
 
     /**
      * Guards every System.out write performed by this class so the
@@ -79,6 +83,7 @@ public class TuiView implements View {
 
     @Override
     public String promptNickname() {
+        emitLine(TuiPrinter.formatBeginGame());
         return promptLine("Pick a nickname: ");
     }
 
@@ -89,13 +94,14 @@ public class TuiView implements View {
 
     @Override
     public void displayError(String message) {
-        emitLine("[ERROR] " + message);
+        String boxedError = TuiPrinter.formatError(message);
+        emitLine(boxedError);
     }
 
     @Override
     public void displayActionResult(ActionResultDto result) {
-        String tag = result.isSuccess() ? "OK" : "REJECTED";
-        emitLine("[" + tag + " | " + result.getLabel() + "] " + result.getMessage());
+        String formattedResult = TuiPrinter.formatActionResult(result);
+        emitLine(formattedResult);
     }
 
     @Override
@@ -105,7 +111,7 @@ public class TuiView implements View {
         // state notification (instead of after every single line).
         StringBuilder sb = new StringBuilder();
         String nl = System.lineSeparator();
-        sb.append("=== game state ===").append(nl);
+        sb.append("=== GAME STATE ===").append(nl);
         sb.append("phase: ").append(state.getPhase()).append(nl);
         sb.append("connected: ").append(state.getConnectedNicknames()).append(nl);
         sb.append("colors:    ").append(state.getNicknameToColor()).append(nl);
@@ -146,36 +152,17 @@ public class TuiView implements View {
      */
     private void appendBoardOverview(StringBuilder sb, Board board, String nl) {
         List<OfferingTile> track = board.getOfferingTrack();
-        if (track != null) {
-            sb.append("offering track:").append(nl);
-            for (int i = 0; i < track.size(); i++) {
-                OfferingTile t = track.get(i);
-                sb.append("  [").append(i).append("] tile ").append(t.getLetter())
-                        .append(" - top=").append(t.getTopCardsToGet())
-                        .append(", bottom=").append(t.getBottomCardsToGet())
-                        .append(", food=").append(t.getFoodGained())
-                        .append(", totem=")
-                        .append(t.isOccupied() ? t.getCurrentTotemColor() : "empty")
-                        .append(nl);
-            }
+        TurnOrderTile tot = board.getTurnOrderTile();
+        if (tot != null) {
+            sb.append(BLUE).append("--- BOARD ---").append(RESET).append(nl);
+            sb.append(TuiPrinter.formatTurnOrder(tot));
         }
 
         appendRow(sb, "upper row", board.getUpperRow(), nl);
         appendRow(sb, "lower row", board.getLowerRow(), nl);
 
-        TurnOrderTile tot = board.getTurnOrderTile();
-        if (tot != null) {
-            sb.append("turn order tile:").append(nl);
-            TurnOrderSlot[] slots = tot.getTurnOrderSlots();
-            for (int i = 0; i < slots.length; i++) {
-                TurnOrderSlot s = slots[i];
-                sb.append("  slot ").append(i)
-                        .append(" (food=").append(s.getFood())
-                        .append(", PP=").append(s.getPP()).append(")")
-                        .append(" totem=")
-                        .append(s.isOccupied() ? s.getTotemColor() : "empty")
-                        .append(nl);
-            }
+        if (track != null) {
+            sb.append(TuiPrinter.formatOfferingTrack(track));
         }
     }
 
@@ -188,53 +175,21 @@ public class TuiView implements View {
      * so the lobby flow stays unaffected.
      */
     private void appendPlayersOverview(StringBuilder sb, GameStateDto state, String nl) {
-        Map<String, List<CharacterCard>> hands = state.getHandsByNickname();
-        Map<String, List<BuildingCard>> buildings = state.getBuildingsByNickname();
-        Map<String, TotemColor> colors = state.getNicknameToColor();
-        Map<String, Integer> foods = state.getFoodByNickname();
-        Map<String, Integer> prestiges = state.getPrestigeByNickname();
+        if (state.getConnectedNicknames() == null) return;
 
-        sb.append("players:").append(nl);
+        sb.append(BLUE).append("--- PLAYERS STATUS ---").append(RESET).append(nl);
+
         for (String nickname : state.getConnectedNicknames()) {
-            TotemColor color = colors == null ? null : colors.get(nickname);
-            Integer food = foods == null ? null : foods.get(nickname);
-            Integer prestige = prestiges == null ? null : prestiges.get(nickname);
-            sb.append("  ").append(nickname)
-                    .append(" (color=").append(color == null ? "?" : color)
-                    .append(", food=").append(food == null ? "?" : food)
-                    .append(", PP=").append(prestige == null ? "?" : prestige)
-                    .append(")").append(nl);
 
-            List<CharacterCard> hand = hands == null ? null : hands.get(nickname);
-            sb.append("    hand:");
-            if (hand == null || hand.isEmpty()) {
-                sb.append(" (empty)").append(nl);
-            } else {
-                sb.append(nl);
-                for (CharacterCard c : hand) {
-                    sb.append("      id=").append(c.getCardID())
-                            .append(" ").append(c.getClass().getSimpleName())
-                            .append(" (era ").append(c.getEra()).append(")")
-                            .append(nl);
-                }
-            }
+            TotemColor color = state.getNicknameToColor().get(nickname);
+            Integer food = state.getFoodByNickname().get(nickname);
+            Integer prestige = state.getPrestigeByNickname().get(nickname);
+            List<CharacterCard> hand = state.getHandsByNickname().get(nickname);
+            List<BuildingCard> builds = state.getBuildingsByNickname().get(nickname);
 
-            List<BuildingCard> owned = buildings == null ? null : buildings.get(nickname);
-            sb.append("    buildings:");
-            if (owned == null || owned.isEmpty()) {
-                sb.append(" (none)").append(nl);
-            } else {
-                sb.append(nl);
-                for (BuildingCard b : owned) {
-                    sb.append("      id=").append(b.getCardID())
-                            .append(" ").append(b.getClass().getSimpleName())
-                            .append(" (era ").append(b.getEra())
-                            .append(", cost=").append(b.getFoodCost())
-                            .append(", endPP=").append(b.getEndOfGamePP())
-                            .append(")")
-                            .append(nl);
-                }
-            }
+            sb.append(TuiPrinter.formatPlayerCompact(nickname, color, food, prestige, hand, builds));
+
+            sb.append(nl);
         }
     }
 

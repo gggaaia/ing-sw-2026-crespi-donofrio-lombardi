@@ -938,6 +938,9 @@ public class ServerController {
         );
     }
 
+    //FIXME: rimuovi tutti i riferimenti ai client, va passato solo il nickname che viene confrontato con quello che
+    //che deve eseguire la mossa
+
     // --- adapter entry points (delegate to current strategy) -------------
 
     public synchronized List<Notification> handleConnect(ClientData client) {

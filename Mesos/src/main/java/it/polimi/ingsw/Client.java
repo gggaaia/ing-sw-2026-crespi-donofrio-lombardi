@@ -4,7 +4,7 @@ import it.polimi.ingsw.common.VirtualServer;
 import it.polimi.ingsw.rmi.client.Rmi_Client;
 import it.polimi.ingsw.socket.client.Socket_Client;
 import it.polimi.ingsw.view.GuiView;
-import it.polimi.ingsw.view.TuiView;
+import it.polimi.ingsw.view.TUI.TuiView;
 import it.polimi.ingsw.view.View;
 
 import java.io.*;
