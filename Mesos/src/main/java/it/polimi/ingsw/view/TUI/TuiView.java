@@ -35,6 +35,17 @@ public class TuiView implements View {
     private final Object outLock = new Object();
     private String activePrompt;
 
+    /**
+     * Separatore visivo lungo, stampato all'inizio e alla fine di ogni
+     * dump di {@code refresh}. Una linea lunga rende molto pi\u00f9
+     * evidente il passaggio da una fase di gioco alla successiva
+     * rispetto al vecchio "==================" da 18 caratteri.
+     */
+    private static final String LONG_SEP =
+            "================================================================";
+    private static final String GAME_STATE_HEADER =
+            "==================== GAME STATE ====================";
+
     @Override
     public void displayConnected(String host, int port) {
         emitLine(TuiPrinter.formatBeginGame());
@@ -55,7 +66,10 @@ public class TuiView implements View {
     public void refresh(ClientController state) {
         StringBuilder sb = new StringBuilder();
         String nl = System.lineSeparator();
-        sb.append(TuiPrinter.BLUE).append("=== GAME STATE ===").append(TuiPrinter.RESET).append(nl);
+        // Cornice di apertura: linea lunga + banner centrato. Aiuta a
+        // separare visivamente i dump di game state successivi.
+        sb.append(TuiPrinter.BLUE).append(LONG_SEP).append(TuiPrinter.RESET).append(nl);
+        sb.append(TuiPrinter.BLUE).append(GAME_STATE_HEADER).append(TuiPrinter.RESET).append(nl);
         sb.append("phase:    ").append(state.getCurrentPhase()).append(nl);
         sb.append("turn:     ").append(state.getCurrentPlayer()).append(nl);
         sb.append("you:      ").append(state.getMyNickname()).append(nl);
@@ -71,7 +85,7 @@ public class TuiView implements View {
             sb.append("leaderboard: ").append(state.getFinalLeaderboard()).append(nl);
             sb.append("winners:     ").append(state.getFinalWinners()).append(nl);
         }
-        sb.append(TuiPrinter.BLUE).append("==================").append(TuiPrinter.RESET);
+        sb.append(TuiPrinter.BLUE).append(LONG_SEP).append(TuiPrinter.RESET);
         // Errore deferred: se il server ha appena rifiutato un'azione
         // ({@code actionRejected}), il messaggio non viene stampato in
         // quel momento ma stashato sul controller. Lo tiriamo fuori qui,
@@ -80,7 +94,7 @@ public class TuiView implements View {
         String err = state.consumePendingError();
         if (err != null) {
             sb.append(nl).append(TuiPrinter.formatError(err));
-            sb.append(nl).append(TuiPrinter.BLUE).append("==================").append(TuiPrinter.RESET);
+            sb.append(nl).append(TuiPrinter.BLUE).append(LONG_SEP).append(TuiPrinter.RESET);
         }
         emitLine(sb.toString());
     }

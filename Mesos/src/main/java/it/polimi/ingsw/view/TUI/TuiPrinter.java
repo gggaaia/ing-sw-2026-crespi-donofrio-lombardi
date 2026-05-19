@@ -22,6 +22,20 @@ public class TuiPrinter {
     public static final String GREEN = "\u001B[32m";
     public static final String BLUE = "\u001B[34m";
     public static final String YELLOW = "\u001B[33m";
+    /** Bold (ANSI SGR 1). Combinabile con i colori sopra. */
+    public static final String BOLD = "\u001B[1m";
+    /** Tag {@code [INFO]} con sfondo verde brillante e testo nero in
+     *  bold, cos\u00ec il marker salta all'occhio anche in mezzo a un
+     *  blocco di output. SGR: 1 = bold, 30 = fg black, 102 = bg bright
+     *  green. */
+    private static final String INFO_TAG = "\u001B[1;30;102m INFO \u001B[0m";
+    /** Bold (ANSI SGR 1). Combinabile con i colori sopra. */
+    public static final String BOLD = "\u001B[1m";
+    /** Tag {@code [INFO]} con sfondo verde brillante e testo nero in
+     *  bold, cos\u00ec il marker salta all'occhio anche in mezzo a un
+     *  blocco di output. SGR: 1 = bold, 30 = fg black, 102 = bg bright
+     *  green. */
+    private static final String INFO_TAG = "\u001B[1;30;102m INFO \u001B[0m";
 
     private static final String nl = System.lineSeparator();
 
@@ -50,9 +64,15 @@ public class TuiPrinter {
         sb.append("+");
         for (int i = 0; i < length + 2; i++) sb.append("-");
         sb.append("+").append(nl);
-        sb.append("| ").append(RED).append(fullMessage).append(RESET).append(" |").append(nl);
-        sb.append("+");
-        for (int i = 0; i < length + 2; i++) sb.append("-");
+    /**
+     * Messaggio informativo (es. "Alice piazza il totem 0"). Il tag
+     * {@code  INFO } \u00e8 stampato con sfondo verde brillante e testo
+     * nero bold; il messaggio stesso \u00e8 in bold. Cos\u00ec
+     * l'utente individua subito gli eventi di gioco anche quando
+     * scorrono velocemente.
+     */
+    public static String formatInfo(String message) {
+        return INFO_TAG + " " + BOLD + message + RESET;
         sb.append("+");
         return sb.toString();
     }
