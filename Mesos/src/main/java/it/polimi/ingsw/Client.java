@@ -35,7 +35,11 @@ public class Client {
                 ? Integer.parseInt(args[1])
                 : (protocol.equals("rmi") ? DEFAULT_RMI_PORT : DEFAULT_SOCKET_PORT);
 
-        View view = viewType.equals("gui") ? new GuiView() : new TuiView();
+        // Lo Scanner usato per i prompt iniziali viene passato alla
+        // TuiView: Scanner ha un buffer interno che fa read-ahead da
+        // System.in, quindi due Scanner sullo stesso stream
+        // andrebbero in conflitto. Una sola istanza per tutto il JVM.
+        View view = viewType.equals("gui") ? new GuiView() : new TuiView(scan);
 
         if (protocol.equals("socket")) {
             startSocketClient(host, port, view);
