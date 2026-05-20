@@ -40,6 +40,19 @@ public class Rmi_Client implements VirtualView {
     }
 
     public void run() throws RemoteException {
+        // Install the retry-connect callback BEFORE the first connect:
+        // if the server rejects a retryable case (duplicate nickname,
+        // bad syntax), the ClientController will re-prompt and run
+        // this to resend connect with the new nickname.
+        controller.setRetryConnect(new Runnable() {
+            @Override public void run() {
+                try {
+                    remoteServer.connect(controller.getMyNickname(), selfStub);
+                } catch (RemoteException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        });
         String nickname = controller.promptNickname();
         controller.setNickname(nickname);
         remoteServer.connect(nickname, selfStub);
@@ -52,10 +65,15 @@ public class Rmi_Client implements VirtualView {
             Thread.currentThread().interrupt();
             return;
         }
-        try {
-            remoteServer.disconnect(nickname);
-        } catch (RemoteException ignored) {
-            // server already cleaned up, nothing to do
+        // Skip the disconnect if the server refused our connect: the
+        // nickname isn't ours, and shipping disconnect(nickname) would
+        // kick the legitimate holder out.
+        if (!controller.wasConnectionRejected()) {
+            try {
+                remoteServer.disconnect(nickname);
+            } catch (RemoteException ignored) {
+                // server already cleaned up, nothing to do
+            }
         }
         // Without unexport, the RMI listener (a non-daemon thread)
         // would keep the JVM alive after main returns. Unexport here

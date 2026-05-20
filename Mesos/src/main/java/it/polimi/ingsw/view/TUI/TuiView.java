@@ -32,9 +32,26 @@ import java.util.Set;
  */
 public class TuiView implements View {
 
-    private final Scanner scan = new Scanner(System.in);
+    private final Scanner scan;
     private final Object outLock = new Object();
     private String activePrompt;
+
+    /**
+     * Reuses an existing Scanner on {@code System.in}. Required: a
+     * Scanner read-aheads from the underlying stream into its own
+     * buffer, so two Scanners on the same {@code System.in} would
+     * steal input from each other. The caller (typically
+     * {@code Client}) creates the single JVM-wide Scanner and hands
+     * it in here.
+     */
+    public TuiView(Scanner scan) {
+        this.scan = scan;
+    }
+
+    /** Convenience for tests / standalone use. */
+    public TuiView() {
+        this(new Scanner(System.in));
+    }
 
     /**
      * Long visual separator printed at the start and end of every

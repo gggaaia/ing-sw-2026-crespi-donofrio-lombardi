@@ -8,6 +8,7 @@ import it.polimi.ingsw.model.enums.TotemColor;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.ObjectInputStream;
+import java.rmi.RemoteException;
 import java.util.List;
 
 /**
@@ -54,13 +55,53 @@ public class Socket_ClientHandler implements ClientToServerMessage.Visitor {
 
     @Override
     public void visitConnect(String nickname) {
+        // Phase check FIRST: if the controller isn't accepting new
+        // connections (e.g. WAITING_FOR_PLAYER_COUNT, a running match,
+        // GAME_ENDED), drop the attempt with the standard "no game"
+        // error WITHOUT touching the registry. This matters when the
+        // new client picks a nickname that happens to collide with an
+        // existing one: skipping the registry check here avoids
+        // confusing the user with a misleading "nickname already in
+        // use" AND, more importantly, prevents the duplicate from
+        // later sending disconnect(nickname) and kicking the
+        // legitimate holder out.
+        if (!server.getController().isAcceptingNewConnections()) {
+            try {
+                virtualView.onNicknameRejected("no game currently accepting players");
+            } catch (RemoteException ignored) {
+                // Duplicate's socket is gone; nothing else to do.
+            }
+            return;
+        }
+        // Phase accepts connects: now try to claim the nickname.
+        // If it's already taken, the registration is refused (the
+        // existing client's view is preserved): we then send the
+        // rejection straight to the duplicate's view, leave
+        // boundNickname null so the finally-block disconnect doesn't
+        // cascade onto the legitimate holder, and let the read loop
+        // terminate naturally when the client closes.
+        if (!server.registerSocket(nickname, virtualView)) {
+            try {
+                virtualView.onNicknameRejected("nickname already in use");
+            } catch (RemoteException ignored) {
+                // Duplicate's socket is gone; nothing else to do.
+            }
+            return;
+        }
         this.boundNickname = nickname;
-        server.registerSocket(nickname, virtualView);
         controller.connect(nickname, virtualView);
     }
 
     @Override
     public void visitDisconnect(String nickname) {
+        // Only honor disconnects for the nickname this socket is
+        // actually bound to. Without this guard, a client that was
+        // rejected at connect (and therefore never set boundNickname)
+        // could still ship a disconnect(<someone else's nick>) and
+        // kick the legitimate holder out.
+        if (boundNickname == null || !boundNickname.equals(nickname)) {
+            return;
+        }
         controller.disconnect(nickname);
     }
 

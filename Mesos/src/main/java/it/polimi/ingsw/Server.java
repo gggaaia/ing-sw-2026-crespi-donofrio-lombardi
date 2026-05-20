@@ -74,13 +74,36 @@ public class Server {
 
     // === Registry API (called by the network adapters) ===
 
-    public synchronized void registerRmi(String nick, VirtualView v) {
+    /**
+     * Registers an RMI client under {@code nick}. Returns {@code false}
+     * (and DOES NOT overwrite the existing entry) if {@code nick} is
+     * already in use. The caller is expected to send an
+     * {@code onNicknameRejected} to the new view in that case.
+     *
+     * Refusing to overwrite is critical: a silent replace would orphan
+     * the original client (its view would be evicted from the
+     * registry, and a follow-up disconnect of the duplicate would
+     * cascade as if the original had left).
+     */
+    public synchronized boolean registerRmi(String nick, VirtualView v) {
+        if (views.containsKey(nick)) {
+            return false;
+        }
         views.put(nick, v);
         rmiClients.add(nick);
+        return true;
     }
 
-    public synchronized void registerSocket(String nick, VirtualView v) {
+    /**
+     * Socket counterpart of {@link #registerRmi}. Same contract: no
+     * overwrite, returns {@code false} on collision.
+     */
+    public synchronized boolean registerSocket(String nick, VirtualView v) {
+        if (views.containsKey(nick)) {
+            return false;
+        }
         views.put(nick, v);
+        return true;
     }
 
     public void unregister(String nick) {

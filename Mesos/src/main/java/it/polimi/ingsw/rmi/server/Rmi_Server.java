@@ -32,7 +32,30 @@ public class Rmi_Server implements VirtualServer {
 
     @Override
     public void connect(String nickname, VirtualView client) throws RemoteException {
-        server.registerRmi(nickname, client);
+        // Phase check FIRST: if the controller isn't accepting new
+        // connections, drop the attempt with "no game" WITHOUT
+        // registering. See the matching comment in
+        // {@code Socket_ClientHandler.visitConnect}.
+        if (!controller.isAcceptingNewConnections()) {
+            try {
+                client.onNicknameRejected("no game currently accepting players");
+            } catch (RemoteException ignored) {
+                // Duplicate's stub already gone; nothing else to do.
+            }
+            return;
+        }
+        // Phase accepts: if the nickname is already taken, the
+        // registry refuses the overwrite so the original client
+        // stays intact, and we send the rejection straight to the
+        // duplicate's stub.
+        if (!server.registerRmi(nickname, client)) {
+            try {
+                client.onNicknameRejected("nickname already in use");
+            } catch (RemoteException ignored) {
+                // Duplicate's stub already gone; nothing else to do.
+            }
+            return;
+        }
         controller.connect(nickname, client);
     }
 

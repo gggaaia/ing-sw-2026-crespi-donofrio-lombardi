@@ -50,7 +50,7 @@ public abstract class PhaseLogic {
         // onNicknameRejected: the client shows the error and kicks
         // off a re-prompt so the user can try again (same or
         // different nickname).
-        c.rejectNickname(nick, "cannot join right now");
+        c.rejectNickname(nick, view, "cannot join right now");
     }
 
     public void onDisconnect(ServerController c, String nick) {
@@ -91,6 +91,24 @@ public abstract class PhaseLogic {
      * a win.
      */
     public boolean isPaused() {
+        return false;
+    }
+
+    /**
+     * True only for phases that meaningfully accept new connects:
+     * the very first connect ({@code WaitingForNickname}), additional
+     * lobby joins ({@code WaitingForPlayers}), and reconnects while
+     * paused ({@code PausedWaitingReconnect}).
+     *
+     * Network adapters consult this BEFORE doing the nickname registry
+     * check, so a duplicate nickname coming in during a phase that
+     * rejects everyone (e.g. {@code WaitingForPlayerCount}) gets the
+     * proper "no game currently accepting players" error instead of
+     * the misleading "nickname already in use" — and, critically, the
+     * duplicate never registers, so it can't later disconnect and kick
+     * the legitimate holder out.
+     */
+    public boolean acceptsNewConnections() {
         return false;
     }
 
@@ -137,6 +155,8 @@ public abstract class PhaseLogic {
         public void onConnect(ServerController c, String nick, VirtualView view) {
             c.acceptFirstPlayerJoin(nick, view);
         }
+        @Override
+        public boolean acceptsNewConnections() { return true; }
     }
 
     /** The first player has to set the participant count. */
@@ -147,7 +167,7 @@ public abstract class PhaseLogic {
             // No match is accepting players until the first one has
             // set the count: just reject and the client shows the
             // error and closes the connection.
-            c.rejectNickname(nick, "no game currently accepting players");
+            c.rejectNickname(nick, view, "no game currently accepting players");
         }
 
         @Override
@@ -163,6 +183,8 @@ public abstract class PhaseLogic {
         public void onConnect(ServerController c, String nick, VirtualView view) {
             c.acceptAdditionalPlayerJoin(nick, view);
         }
+        @Override
+        public boolean acceptsNewConnections() { return true; }
     }
 
     /** Color picking: everyone picks their colour in order. */
@@ -269,6 +291,8 @@ public abstract class PhaseLogic {
             // While paused we ONLY accept reconnects of nicknames already in the match.
             c.acceptReconnect(nick, view);
         }
+        @Override
+        public boolean acceptsNewConnections() { return true; }
     }
 
     /** Match over, terminal phase. */

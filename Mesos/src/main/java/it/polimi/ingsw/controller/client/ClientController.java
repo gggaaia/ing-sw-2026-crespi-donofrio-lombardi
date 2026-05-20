@@ -102,6 +102,26 @@ public class ClientController {
     private boolean pendingGameEnded;
 
     /**
+     * Set by {@link #nicknameRejected} so the network client (Rmi_Client
+     * / Socket_Client) knows to skip the trailing {@code disconnect()}
+     * call after the latch fires. Without this, a rejected duplicate
+     * would still ship {@code disconnect(nick)} which on the server
+     * would kick the legitimate holder of that nickname out of the
+     * lobby/match.
+     */
+    private boolean connectionRejected;
+
+    /**
+     * Callback installed by the network client (Rmi_Client /
+     * Socket_Client) that re-sends a {@code connect} to the server
+     * using the controller's current {@link #myNickname}. Used by
+     * {@link #nicknameRejected(String)} when the rejection is
+     * retryable (duplicate nickname, bad syntax) to re-prompt the
+     * user instead of closing the session.
+     */
+    private Runnable retryConnect;
+
+    /**
      * One-shot latch the client's main thread (Rmi_Client.run /
      * Socket_Client.run) uses to park itself until the
      * {@code onGameEnded} event arrives. The network thread calls
@@ -126,6 +146,15 @@ public class ClientController {
     /** Used by the adapter to hand the controller a reference to the server. */
     public synchronized void setVirtualServer(VirtualServer vs) {
         this.virtualServer = vs;
+    }
+
+    /**
+     * Install the "re-send connect" callback used by
+     * {@link #nicknameRejected(String)} to retry with a fresh
+     * nickname after a recoverable rejection.
+     */
+    public synchronized void setRetryConnect(Runnable r) {
+        this.retryConnect = r;
     }
 
     /** Initial nickname prompt; called by the adapter. */
@@ -462,8 +491,51 @@ public class ClientController {
      */
     public synchronized void nicknameRejected(String reason) {
         view.displayError(reason);
+        // Retryable cases (duplicate nickname, bad syntax): the server
+        // is still accepting connects, just not THIS nickname. Prompt
+        // for a different one and re-send connect via the adapter's
+        // installed callback. We stay synchronized while prompting:
+        // no other event can usefully race in (server is waiting on
+        // the next connect from us), and any incoming callback after
+        // the retry just queues on the monitor.
+        if (isRetryableConnectError(reason) && retryConnect != null) {
+            view.displayInfo("Please choose a different nickname.");
+            String newNick = view.promptNickname();
+            this.myNickname = newNick;
+            try {
+                retryConnect.run();
+            } catch (RuntimeException e) {
+                view.displayError("Reconnect failed: " + e.getMessage());
+                this.connectionRejected = true;
+                endLatch.countDown();
+            }
+            return;
+        }
         view.displayInfo("Closing connection.");
+        this.connectionRejected = true;
         endLatch.countDown();
+    }
+
+    /**
+     * True for connect rejections the user can fix by trying again
+     * with a different nickname (e.g. "nickname already in use",
+     * "nickname too long (max 16)"). False for phase-level rejections
+     * such as "no game currently accepting players" or "cannot join
+     * right now", which mean the session has to close.
+     */
+    private static boolean isRetryableConnectError(String reason) {
+        return reason != null && reason.startsWith("nickname");
+    }
+
+    /**
+     * True iff the server refused our connect attempt (duplicate
+     * nickname, no game accepting, etc.). Network clients check this
+     * after {@link #awaitGameEnd()} to skip the trailing
+     * {@code disconnect()} call: shipping a disconnect for a nickname
+     * we never officially held would kick the legitimate holder out.
+     */
+    public synchronized boolean wasConnectionRejected() {
+        return connectionRejected;
     }
 
     /**

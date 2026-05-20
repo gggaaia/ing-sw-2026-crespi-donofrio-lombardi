@@ -45,6 +45,19 @@ public class Socket_Client implements ServerToClientMessage.Visitor {
     }
 
     public void run() {
+        // Install the retry-connect callback BEFORE the first connect:
+        // if the server rejects a retryable case (duplicate nickname,
+        // bad syntax), the ClientController will re-prompt and run
+        // this to resend connect with the new nickname.
+        controller.setRetryConnect(new Runnable() {
+            @Override public void run() {
+                try {
+                    virtualServer.connect(controller.getMyNickname(), null);
+                } catch (RemoteException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        });
         String nickname = controller.promptNickname();
         controller.setNickname(nickname);
 
@@ -77,9 +90,14 @@ public class Socket_Client implements ServerToClientMessage.Visitor {
             Thread.currentThread().interrupt();
             return;
         }
-        try {
-            virtualServer.disconnect(nickname);
-        } catch (RemoteException ignored) {}
+        // Skip the disconnect if the server refused our connect: the
+        // nickname isn't ours, and shipping disconnect(nickname) would
+        // kick the legitimate holder out.
+        if (!controller.wasConnectionRejected()) {
+            try {
+                virtualServer.disconnect(nickname);
+            } catch (RemoteException ignored) {}
+        }
     }
 
     private void readLoop() {

@@ -125,6 +125,20 @@ public class ServerController {
         phase.onConnect(this, nick, view);
     }
 
+    /**
+     * True iff the current phase has a meaningful {@code onConnect}
+     * (lobby join or paused-reconnect). The network adapters check
+     * this BEFORE the nickname-registry duplicate check, so that
+     * during phases that reject everyone (e.g. WAITING_FOR_PLAYER_COUNT
+     * or a running match) a duplicate-nickname connect gets the
+     * proper "no game" error and, crucially, never gets registered —
+     * which in turn prevents its later disconnect from kicking out
+     * the legitimate holder of that nickname.
+     */
+    public synchronized boolean isAcceptingNewConnections() {
+        return phase.acceptsNewConnections();
+    }
+
     public synchronized void disconnect(String nick) {
         phase.onDisconnect(this, nick);
     }
@@ -298,19 +312,51 @@ public class ServerController {
     }
 
     /**
-     * Sends an {@code onNicknameRejected} to the caller with the
-     * given reason. Triggers a nickname re-prompt on the client so
-     * the user can try again (same or different nickname).
+     * Sends an {@code onNicknameRejected} to {@code targetView} with
+     * the given reason. Triggers a nickname re-prompt on the client
+     * so the user can try again (same or different nickname).
+     *
+     * Important: we send to {@code targetView} directly instead of
+     * looking it up in the registry by nickname. On a duplicate
+     * connect the new view is NOT in the registry (the server
+     * refuses to overwrite the original), so a registry lookup
+     * would either find the legitimate holder's view (and reject
+     * the wrong client) or nothing at all. We also swallow any
+     * {@link RemoteException} silently: the duplicate isn't tracked
+     * anywhere, so there is no disconnect cascade to trigger.
+     *
+     * Also unregisters the nickname from the server registry if it
+     * happens to be bound to {@code targetView}. This covers the
+     * case where the network adapter registered the view BEFORE the
+     * controller reached this rejection (e.g. a phase-level reject
+     * during WAITING_FOR_PLAYER_COUNT): leaving the entry behind
+     * would block future legitimate uses of the nickname AND keep
+     * the heartbeat pinging a doomed connection.
      */
-    void rejectNickname(String nick, final String reason) {
+    void rejectNickname(String nick, final VirtualView targetView, final String reason) {
         // Terminal case: the client will close the connection.
         // {@code ClientController.nicknameRejected} prints the error
         // directly (no commit) and counts down the session latch.
         // No commit here either: we'd just refresh on an empty
         // mini-state, which adds nothing.
-        sendToNickname(nick, new ViewCall() {
-            @Override public void apply(VirtualView v) throws RemoteException {
-                v.onNicknameRejected(reason);
+        if (targetView == null) {
+            return;
+        }
+        if (nick != null && server.getView(nick) == targetView) {
+            server.unregister(nick);
+        }
+        // server.send falls back to inline execution when nick isn't
+        // an RMI client (which is now always the case here, since
+        // we just unregistered it), so the rejection still goes out.
+        server.send(nick, new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    targetView.onNicknameRejected(reason);
+                } catch (RemoteException ignored) {
+                    // Duplicate's view is gone; we don't cascade
+                    // because this view was never registered.
+                }
             }
         });
     }
@@ -365,7 +411,7 @@ public class ServerController {
     void acceptFirstPlayerJoin(final String nick, VirtualView view) {
         String error = validateNicknameSyntax(nick);
         if (error != null) {
-            rejectNickname(nick, error);
+            rejectNickname(nick, view, error);
             return;
         }
         joinedNicknames.add(nick);
@@ -426,11 +472,11 @@ public class ServerController {
     void acceptAdditionalPlayerJoin(final String nick, VirtualView view) {
         String error = validateNicknameSyntax(nick);
         if (error != null) {
-            rejectNickname(nick, error);
+            rejectNickname(nick, view, error);
             return;
         }
         if (joinedNicknames.contains(nick)) {
-            rejectNickname(nick, "nickname already in use");
+            rejectNickname(nick, view, "nickname already in use");
             return;
         }
         joinedNicknames.add(nick);
