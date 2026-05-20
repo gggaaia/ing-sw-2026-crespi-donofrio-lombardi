@@ -27,4 +27,8 @@ public class Builder extends CharacterCard {
         player.increasePPBuilderBonus(prestigePoint);
         player.increaseBuildingDiscount(buildingCostRedux);
     }
+    @Override
+    public String toString() {
+        return super.toString()+";Redux: "+this.buildingCostRedux+";PP: "+this.prestigePoint;
+    }
 }

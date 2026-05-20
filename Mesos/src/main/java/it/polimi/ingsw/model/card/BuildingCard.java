@@ -62,4 +62,9 @@ public class BuildingCard extends Card {
      *               in normal play)
      */
     public void turnOrderBonus(Player player) {}
+
+    @Override
+    public String toString() {
+        return super.toString()+";Cost: "+this.foodCost+";PP: "+this.endOfGamePP;
+    }
 }

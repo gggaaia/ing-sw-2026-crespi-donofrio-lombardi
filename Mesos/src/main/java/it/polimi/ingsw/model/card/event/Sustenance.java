@@ -56,4 +56,9 @@ public class Sustenance extends EventCard {
            }
         }
     }
+
+    @Override
+    public String toString() {
+        return super.toString()+";Malus: "+this.malusPoints;
+    }
 }

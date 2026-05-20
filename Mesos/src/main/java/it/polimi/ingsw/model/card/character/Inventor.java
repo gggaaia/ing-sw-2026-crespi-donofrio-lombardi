@@ -17,4 +17,9 @@ public class Inventor extends CharacterCard {
     public void drawEffect(Player player) {
         player.increaseInventorCounter(1);
     }
+
+    @Override
+    public String toString() {
+        return super.toString()+";Icon: "+this.inventorIcon;
+    }
 }

@@ -59,4 +59,9 @@ public abstract class Card implements Serializable {
     public boolean firstRoundChangeRow(CardRow row) { return false; }
     public void applyEvent(List<Player> players) { }
 
+    @Override
+    public String toString() {
+        return "Era: " + getEra();
+    }
+
 }

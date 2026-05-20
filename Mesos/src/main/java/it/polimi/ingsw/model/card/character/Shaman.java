@@ -24,4 +24,9 @@ public class Shaman extends CharacterCard {
         player.increaseShamanCounter(1);
         player.increaseStars(stars);
     }
+
+    @Override
+    public String toString() {
+        return super.toString()+";★: "+this.stars;
+    }
 }

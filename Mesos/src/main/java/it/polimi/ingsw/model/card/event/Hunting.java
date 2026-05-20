@@ -34,4 +34,9 @@ public class Hunting extends EventCard {
             player.changeFood(count);
         }
     }
+
+    @Override
+    public String toString() {
+        return super.toString()+";Bonus: "+this.bonusPoint;
+    }
 }

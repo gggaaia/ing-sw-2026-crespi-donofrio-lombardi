@@ -85,4 +85,9 @@ public class Ritual extends EventCard {
             }
         }
     }
+
+    @Override
+    public String toString() {
+        return super.toString()+";Bonus: "+this.bonusPoints+";Malus: "+this.malusPoints;
+    }
 }

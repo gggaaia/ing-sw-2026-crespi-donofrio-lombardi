@@ -324,54 +324,23 @@ public class TuiView implements View {
      * characters, buildings, events. If the list is empty it prints
      * "(none)" so the user can clearly tell the row is empty.
      */
+    /**
+     * Appende il blocco di una singola CardRow (upper o lower) con un separatore giallo
+     * e il titolo centrato tra i trattini.
+     */
     private void appendRow(StringBuilder sb, String label, CardRow row, String nl) {
         if (row == null) return;
-        sb.append(label).append(":").append(nl);
 
-        List<CharacterCard> chars = row.getCharacterCards();
-        sb.append("  characters:");
-        if (chars.isEmpty()) {
-            sb.append(" (none)").append(nl);
-        } else {
-            sb.append(nl);
-            for (CharacterCard c : chars) {
-                sb.append("    id=").append(c.getCardID())
-                        .append(" ").append(c.getClass().getSimpleName())
-                        .append(" (era ").append(c.getEra()).append(")")
-                        .append(nl);
-            }
-        }
+        int totalWidth = 50;
+        int labelLength = label.length() + 2;
+        int paddingLeft = (totalWidth - labelLength) / 2;
+        int paddingRight = totalWidth - labelLength - paddingLeft;
 
-        List<BuildingCard> builds = row.getBuildingCards();
-        sb.append("  buildings:");
-        if (builds.isEmpty()) {
-            sb.append(" (none)").append(nl);
-        } else {
-            sb.append(nl);
-            for (BuildingCard b : builds) {
-                sb.append("    id=").append(b.getCardID())
-                        .append(" ").append(b.getClass().getSimpleName())
-                        .append(" (era ").append(b.getEra())
-                        .append(", cost=").append(b.getFoodCost())
-                        .append(", endPP=").append(b.getEndOfGamePP())
-                        .append(")")
-                        .append(nl);
-            }
-        }
+        String separator = "-".repeat(paddingLeft) + " " + label.toUpperCase() + " " + "-".repeat(paddingRight);
 
-        List<EventCard> events = row.getEventCards();
-        sb.append("  events:");
-        if (events.isEmpty()) {
-            sb.append(" (none)").append(nl);
-        } else {
-            sb.append(nl);
-            for (Card e : events) {
-                sb.append("    id=").append(e.getCardID())
-                        .append(" ").append(e.getClass().getSimpleName())
-                        .append(" (era ").append(e.getEra()).append(")")
-                        .append(nl);
-            }
-        }
+        sb.append(TuiPrinter.YELLOW).append(separator).append(TuiPrinter.RESET).append(nl);
+
+        sb.append(TuiPrinter.formatCardRow(row));
     }
 
     private void appendPlayersOverview(StringBuilder sb, ClientController state, String nl) {

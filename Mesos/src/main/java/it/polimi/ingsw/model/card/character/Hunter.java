@@ -25,5 +25,8 @@ public class Hunter extends CharacterCard {
         player.increaseHunterCounter(1);
     }
 
-
+    @Override
+    public String toString() {
+        return super.toString()+";Bonus: "+this.foodBonus;
+    }
 }

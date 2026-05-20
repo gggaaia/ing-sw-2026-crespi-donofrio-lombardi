@@ -45,4 +45,9 @@ public class Paintings extends EventCard {
             }
         }
     }
+
+    @Override
+    public String toString() {
+        return super.toString()+";Bonus: "+this.bonusPoints+";MinPainters: "+this.minPainters;
+    }
 }

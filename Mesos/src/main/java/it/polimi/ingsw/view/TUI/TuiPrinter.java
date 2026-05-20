@@ -1,10 +1,13 @@
 package it.polimi.ingsw.view.TUI;
 
+import it.polimi.ingsw.model.CardRow;
 import it.polimi.ingsw.model.OfferingTile;
 import it.polimi.ingsw.model.TurnOrderSlot;
 import it.polimi.ingsw.model.TurnOrderTile;
 import it.polimi.ingsw.model.card.BuildingCard;
+import it.polimi.ingsw.model.card.Card;
 import it.polimi.ingsw.model.card.CharacterCard;
+import it.polimi.ingsw.model.card.EventCard;
 import it.polimi.ingsw.model.enums.TotemColor;
 
 import java.time.LocalTime;
@@ -45,9 +48,9 @@ public class TuiPrinter {
                 + " \u2588\u2588\u2588\u2588\u2588     \u2588\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2592\u2592\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588  \u2592\u2592\u2592\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2592  \u2592\u2592\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588 " + nl
                 + "\u2592\u2592\u2592\u2592\u2592     \u2592\u2592\u2592\u2592\u2592 \u2592\u2592\u2592\u2592\u2592\u2592\u2592\u2592\u2592\u2592  \u2592\u2592\u2592\u2592\u2592\u2592\u2592\u2592     \u2592\u2592\u2592\u2592\u2592\u2592\u2592    \u2592\u2592\u2592\u2592\u2592\u2592\u2592\u2592\u2592  " + nl;
 
-        return "Welcome to" + nl
-                + RED + banner + RESET
-                + "a Cranio Creations Game" + nl;
+        return  RED + "Welcome to" + nl
+                 + banner
+                + "a Cranio Creations Game" + RESET + nl;
     }
 
     /** Red, boxed error message. */
@@ -104,8 +107,8 @@ public class TuiPrinter {
         String info = String.format(" %s | %s | Food: %s | PP: %s ",
                 nickname,
                 color == null ? "-" : color,
-                food == null ? "?" : food,
-                pp == null ? "?" : pp);
+                food == null ? "0" : food,
+                pp == null ? "0" : pp);
         sb.append("+").append("-".repeat(info.length())).append("+").append(nl);
         sb.append("|").append(info).append("|").append(nl);
         sb.append("+").append("-".repeat(info.length())).append("+").append(nl);
@@ -193,4 +196,153 @@ public class TuiPrinter {
         }
         return String.format("%-" + n + "s", s);
     }
+
+    /**
+     * Genera la rappresentazione grafica affiancata delle carte contenute in una CardRow.
+     */
+    public static String formatCardRow(CardRow row) {
+        if (row == null) return "";
+        StringBuilder sb = new StringBuilder();
+
+        sb.append("  characters:").append(nl);
+        List<CharacterCard> chars = row.getCharacterCards();
+        if (chars.isEmpty()) {
+            sb.append("    (none)").append(nl);
+        } else {
+            List<List<String>> allCharBlocks = new ArrayList<>();
+            for (CharacterCard c : chars) {
+                List<String> info = new ArrayList<>();
+
+                info.add("[" + c.getCardID() + "] " + c.getClass().getSimpleName());
+
+                String cardDetails = c.toString();
+                if (cardDetails != null && !cardDetails.isEmpty()) {
+                    String[] lines = cardDetails.split(";");
+                    for (String line : lines) {
+                        info.add(line);
+                    }
+                }
+
+                allCharBlocks.add(renderSingleCard(info));
+            }
+            sb.append(sideBySideBlocks(allCharBlocks));
+        }
+
+        sb.append("  events:").append(nl);
+        List<EventCard> events = row.getEventCards();
+        if (events.isEmpty()) {
+            sb.append("    (none)").append(nl);
+        } else {
+            List<List<String>> allEventBlocks = new ArrayList<>();
+            for (Card e : events) {
+                List<String> info = new ArrayList<>();
+
+                info.add("[" + e.getCardID() + "] " + e.getClass().getSimpleName());
+
+                String cardDetails = e.toString();
+                if (cardDetails != null && !cardDetails.isEmpty()) {
+                    String[] lines = cardDetails.split(";");
+                    for (String line : lines) {
+                        info.add(line);
+                    }
+                }
+
+                allEventBlocks.add(renderSingleCard(info));
+            }
+            sb.append(sideBySideBlocks(allEventBlocks));
+        }
+
+        sb.append("  buildings:").append(nl);
+        List<BuildingCard> builds = row.getBuildingCards();
+        if (builds.isEmpty()) {
+            sb.append("    (none)").append(nl);
+        } else {
+            List<List<String>> allBuildBlocks = new ArrayList<>();
+            for (BuildingCard b : builds) {
+                List<String> info = new ArrayList<>();
+
+                info.add("[" + b.getCardID() + "] " + b.getClass().getSimpleName());
+
+                String cardDetails = b.toString();
+                if (cardDetails != null && !cardDetails.isEmpty()) {
+                    String[] lines = cardDetails.split(";");
+                    for (String line : lines) {
+                        info.add(line);
+                    }
+                }
+
+                allBuildBlocks.add(renderSingleCard(info));
+            }
+            sb.append(sideBySideBlocks(allBuildBlocks));
+        }
+
+        return sb.toString();
+    }
+
+    /**
+     * Crea i bordi usando '-' e '|' attorno alle informazioni verticali di una singola carta.
+     */
+    private static List<String> renderSingleCard(List<String> infoLines) {
+        int maxTextLength = 0;
+        for (String line : infoLines) {
+            if (line.length() > maxTextLength) {
+                maxTextLength = line.length();
+            }
+        }
+
+        int internalWidth = maxTextLength + 2;
+        List<String> cardImage = new ArrayList<>();
+
+        String horizontalBorder = "+" + "-".repeat(internalWidth) + "+";
+        cardImage.add(horizontalBorder);
+
+        for (String line : infoLines) {
+            int paddingNeeded = internalWidth - line.length() - 1;
+            String formattedLine = "| " + line + " ".repeat(paddingNeeded) + "|";
+            cardImage.add(formattedLine);
+        }
+
+        cardImage.add(horizontalBorder);
+        return cardImage;
+    }
+
+    /**
+     * Unisce orizzontalmente le righe dei vari blocchi di carte inserendo uno spazio.
+     */
+    private static String sideBySideBlocks(List<List<String>> blocks) {
+        if (blocks.isEmpty()) return "";
+        StringBuilder sb = new StringBuilder();
+
+        int maxRows = 0;
+        for (List<String> block : blocks) {
+            if (block.size() > maxRows) {
+                maxRows = block.size();
+            }
+        }
+
+        for (int r = 0; r < maxRows; r++) {
+            sb.append("    ");
+            for (int b = 0; b < blocks.size(); b++) {
+                List<String> currentCard = blocks.get(b);
+                int lastIndex = currentCard.size() - 1;
+
+                if (r < lastIndex) {
+                    sb.append(currentCard.get(r));
+                } else if (r == lastIndex) {
+                    sb.append(currentCard.get(lastIndex));
+                } else {
+                    int cardWidth = currentCard.get(0).length();
+                    sb.append(" ".repeat(cardWidth));
+                }
+
+                if (b < blocks.size() - 1) {
+                    sb.append("   ");
+                }
+            }
+            sb.append(nl);
+        }
+        return sb.toString();
+    }
+
+
 }
