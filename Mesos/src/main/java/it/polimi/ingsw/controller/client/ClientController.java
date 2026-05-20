@@ -21,23 +21,23 @@ import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 
 /**
- * Controller client-side. Tiene un mini-stato locale che riflette
- * quello che il server gli ha detto, aggiornato evento-per-evento.
+ * Client-side controller. Keeps a local mini-state that mirrors what
+ * the server told us, updated event by event.
  *
- * Threading model (semplice):
- *   - tutti i metodi pubblici sono synchronized
- *   - i metodi di evento (chiamati dal thread di rete RMI o Socket)
- *     aggiornano lo stato e fanno view.refresh()
- *   - i metodi *Turn, se il turno \u00e8 nostro, BLOCCANO sul prompt
- *     view.promptXxx() e poi mandano l'azione via virtualServer
- *   - la chiamata di rete uscente (virtualServer.xxx()) avviene
- *     dentro il metodo synchronized: il lock \u00e8 tenuto, ma la
- *     chiamata \u00e8 veloce su RMI (microsecondi al massimo per il
- *     dispatch) e su socket (writeObject in buffer OS)
+ * Threading model (kept simple):
+ *   - every public method is synchronized
+ *   - event methods (called from the RMI / Socket network thread)
+ *     mutate the state and trigger view.refresh()
+ *   - the *Turn methods, when it's our turn, BLOCK on view.promptXxx()
+ *     and then push the action through virtualServer
+ *   - the outgoing network call (virtualServer.xxx()) happens inside
+ *     the synchronized method: the lock is held, but the call is
+ *     fast both on RMI (microseconds for the dispatch) and on socket
+ *     (writeObject into the OS buffer)
  *
- * Il "block" durante il prompt significa che, mentre l'utente pensa,
- * gli eventi entranti dal server si accodano nel buffer del socket /
- * thread pool RMI. Vengono processati appena l'utente sceglie.
+ * "Block" on the prompt means that, while the user is thinking,
+ * incoming events from the server just queue up in the socket buffer
+ * / RMI thread pool. They get processed as soon as the user picks.
  */
 public class ClientController {
 
@@ -45,7 +45,7 @@ public class ClientController {
     private String myNickname;
     private VirtualServer virtualServer;
 
-    // === mini-stato locale ===
+    // === local mini-state ===
 
     private Phase currentPhase;
     private String currentPlayer;
@@ -67,47 +67,46 @@ public class ClientController {
     private List<String> finalLeaderboard;
     private List<String> finalWinners;
     /**
-     * Errore lato server (es. "tile already occupied") in attesa di
-     * essere mostrato. Lo settiamo in {@link #actionRejected} senza
-     * stamparlo subito: il successivo {@link #commit()} lo flusha
-     * DOPO il dump dello stato e prima del prompt.
+     * Server-side error (e.g. "tile already occupied") waiting to be
+     * shown. We just stash it in {@link #actionRejected} without
+     * printing it right away: the next {@link #commit()} flushes it
+     * AFTER the state dump and right before the prompt.
      */
     private String pendingError;
 
     /**
-     * Log di gioco accumulati dagli handler degli eventi (es.
-     * "A picked RED", "B prestige -> 5", "Round 1 started"). Vengono
-     * stampati in blocco da {@link #commit()} dopo il refresh dello
-     * stato, cos\u00ec l'utente vede prima il dump aggiornato e poi
-     * la cronologia di cosa \u00e8 successo.
+     * Game log lines accumulated by the event handlers (e.g.
+     * "A picked RED", "B prestige -> 5", "Round 1 started"). They
+     * get dumped in one batch by {@link #commit()} after the state
+     * refresh, so the user first sees the up-to-date dump and then
+     * the history of what happened.
      */
     private final List<String> pendingLogs = new ArrayList<>();
 
     /**
-     * Prompt da eseguire al prossimo {@link #commit()}, dopo refresh
-     * e log. Settato dagli handler dei {@code *Turn} quando il turno
-     * \u00e8 nostro. Qui rimane parcheggiato finch\u00e9 commit non
-     * lo invoca: cos\u00ec il blocco su stdin avviene DOPO che
-     * abbiamo finito di renderizzare lo stato (e non a met\u00e0
-     * di un bundle).
+     * Prompt to run on the next {@link #commit()}, after refresh and
+     * logs. Set by the {@code *Turn} handlers when it's our turn.
+     * It just sits here until commit fires it: this way the block on
+     * stdin happens AFTER we've finished rendering the state (and
+     * not in the middle of a bundle).
      */
     private Runnable pendingPrompt;
 
     /**
-     * Marker che indica che il prossimo {@link #commit()} deve anche
-     * trigghiare {@link #endLatch} (fine partita). Settato in
-     * {@link #gameEnded}. Cos\u00ec il main thread blocca in
-     * {@code awaitGameEnd} finch\u00e9 il dump finale \u00e8 stato
-     * mostrato.
+     * Flag telling the next {@link #commit()} to also fire
+     * {@link #endLatch} (game over). Set inside {@link #gameEnded}.
+     * That way the main thread keeps blocking in
+     * {@code awaitGameEnd} until the final dump has actually been
+     * shown.
      */
     private boolean pendingGameEnded;
 
     /**
-     * Latch one-shot che il main thread del client (Rmi_Client.run /
-     * Socket_Client.run) usa per addormentarsi finch\u00e9 non arriva
-     * l'evento {@code onGameEnded}. Il network thread chiama
-     * {@code countDown()} dentro {@code gameEnded(...)} svegliando il
-     * main thread. Vedi {@link #awaitGameEnd()}.
+     * One-shot latch the client's main thread (Rmi_Client.run /
+     * Socket_Client.run) uses to park itself until the
+     * {@code onGameEnded} event arrives. The network thread calls
+     * {@code countDown()} inside {@code gameEnded(...)} which wakes
+     * the main thread up. See {@link #awaitGameEnd()}.
      */
     private final CountDownLatch endLatch = new CountDownLatch(1);
 
@@ -115,7 +114,7 @@ public class ClientController {
         this.view = view;
     }
 
-    /** Chiamato dall'adapter (Rmi_Client / Socket_Client) dopo il prompt nickname. */
+    /** Called by the adapter (Rmi_Client / Socket_Client) after the nickname prompt. */
     public synchronized void setNickname(String nick) {
         this.myNickname = nick;
     }
@@ -124,29 +123,28 @@ public class ClientController {
         return myNickname;
     }
 
-    /** Chiamato dall'adapter per dare al controller il puntatore al server. */
+    /** Used by the adapter to hand the controller a reference to the server. */
     public synchronized void setVirtualServer(VirtualServer vs) {
         this.virtualServer = vs;
     }
 
-    /** Prompt iniziale del nickname; chiamato dall'adapter. */
+    /** Initial nickname prompt; called by the adapter. */
     public String promptNickname() {
         return view.promptNickname();
     }
 
     /**
-     * Blocca il chiamante finch\u00e9 non arriva l'evento
-     * {@code onGameEnded}. Usato da {@code Rmi_Client.run()} e
-     * {@code Socket_Client.run()} per tenere vivo il main thread
-     * durante la partita, senza fare polling. Il network thread
-     * chiama {@code endLatch.countDown()} dentro {@link #gameEnded}
-     * quando la partita termina.
+     * Blocks the caller until the {@code onGameEnded} event arrives.
+     * Used by {@code Rmi_Client.run()} and {@code Socket_Client.run()}
+     * to keep the main thread alive during the match without polling.
+     * The network thread calls {@code endLatch.countDown()} inside
+     * {@link #gameEnded} when the match is over.
      */
     public void awaitGameEnd() throws InterruptedException {
         endLatch.await();
     }
 
-    // === getter per la view (per refresh) ===
+    // === getters for the view (used by refresh) ===
 
     public synchronized Phase getCurrentPhase()                       { return currentPhase; }
     public synchronized String getCurrentPlayer()                     { return currentPlayer; }
@@ -169,13 +167,13 @@ public class ClientController {
     public synchronized List<String> getFinalWinners()                { return finalWinners == null ? null : new ArrayList<>(finalWinners); }
 
     // ====================================================================
-    // Event handlers (chiamati da Rmi_Client / Socket_Client).
+    // Event handlers (called by Rmi_Client / Socket_Client).
     //
-    // REGOLA SEMPLICE: ogni handler aggiorna SOLO il mini-stato locale
-    // e accoda eventuali log/prompt. NESSUN handler chiama
-    // view.refresh / view.displayInfo / view.promptXxx direttamente.
-    // L'unico render path \u00e8 {@link #commit()}, invocato dal server
-    // a fine bundle via {@code v.onCommit()}.
+    // SIMPLE RULE: every handler only updates the local mini-state and
+    // queues any log/prompt. NO handler calls view.refresh /
+    // view.displayInfo / view.promptXxx directly. The only render
+    // path is {@link #commit()}, triggered by the server at the end
+    // of a bundle via {@code v.onCommit()}.
     // ====================================================================
 
     public synchronized void playerJoined(String nick) {
@@ -187,9 +185,10 @@ public class ClientController {
 
     public synchronized void awaitPlayerCount(String firstPlayerNick) {
         this.currentPlayer = firstPlayerNick;
-        // Il primo player non riceve uno snapshot iniziale (vedi
-        // ServerController.acceptFirstPlayerJoin); senza snapshot non
-        // saprebbe di essere in lobby. Lo aggiungiamo manualmente qui.
+        // The first player doesn't get an initial snapshot (see
+        // ServerController.acceptFirstPlayerJoin); without a snapshot
+        // they wouldn't know they're in the lobby. So add them
+        // manually here.
         if (!joinedPlayers.contains(firstPlayerNick)) {
             joinedPlayers.add(firstPlayerNick);
         }
@@ -395,14 +394,15 @@ public class ClientController {
 
     public synchronized void prestigeChanged(String nick, int newPrestige) {
         Integer prev = prestige.put(nick, newPrestige);
-        // Mostriamo il log solo se il valore \u00e8 EFFETTIVAMENTE
-        // cambiato rispetto a uno noto. Saltiamo:
-        //   - prev == null   : primo broadcast (es. il bundle iniziale
-        //                       di startMatch con prestige=0/food=0).
-        //                       L'utente vedr\u00e0 i valori nel dump,
-        //                       non serve un log "X prestige -> 0".
-        //   - prev == new    : il server emette pi\u00f9 fasi di scoring
-        //                       e capita che la seconda non cambi nulla.
+        // Only log the change if the value ACTUALLY changed from a
+        // known previous one. We skip:
+        //   - prev == null   : first broadcast (e.g. the startMatch
+        //                      initial bundle with prestige=0/food=0).
+        //                      The user sees the value in the dump
+        //                      anyway, no need for an "X prestige -> 0".
+        //   - prev == new    : the server emits several scoring passes
+        //                      and sometimes the second one doesn't
+        //                      change anything.
         if (prev != null && prev != newPrestige) {
             pendingLogs.add(nick + " prestige -> " + newPrestige);
         }
@@ -425,9 +425,9 @@ public class ClientController {
         this.finalWinners = winners;
         pendingLogs.add("Game ended. Winners: " + winners);
         pendingGameEnded = true;
-        // NB: il countDown del latch \u00e8 spostato in commit(), in modo
-        // che il main thread non esca dall'awaitGameEnd prima che il
-        // dump finale venga mostrato.
+        // NB: the latch countDown is moved to commit(), so the main
+        // thread doesn't exit awaitGameEnd before the final dump has
+        // actually been printed.
     }
 
     public synchronized void matchPaused(String reason) {
@@ -448,17 +448,17 @@ public class ClientController {
     }
 
     public synchronized void actionRejected(String reason) {
-        // Solo store: l'errore viene stampato dal prossimo {@link #commit()}
-        // (sezione "displayError"), dopo il dump dello stato e prima
-        // del prompt.
+        // Just stash it: the error gets printed by the next
+        // {@link #commit()} (in the "displayError" step), after the
+        // state dump and before the prompt.
         this.pendingError = reason;
     }
 
     /**
-     * Il connect del client \u00e8 stato rifiutato dal server. Caso
-     * speciale: lo stampiamo SUBITO (senza passare da commit) e
-     * trigghiamo il latch, perch\u00e9 questo \u00e8 un terminale di
-     * sessione e nessun commit seguir\u00e0.
+     * The client's connect attempt was rejected by the server.
+     * Special case: print it RIGHT NOW (no commit) and trigger the
+     * latch, because this is a session terminator and no commit will
+     * follow.
      */
     public synchronized void nicknameRejected(String reason) {
         view.displayError(reason);
@@ -467,31 +467,32 @@ public class ClientController {
     }
 
     /**
-     * Aggiorna in modo silenzioso il mini-stato della board (offering
-     * track, upper/lower row, turn order tile) con quello arrivato
-     * dal server. NON fa view.refresh(): il dump completo lo fa il
-     * successivo evento {@code *Turn} che segue il broadcast della
-     * board nel server controller. Cos\u00ec il render del game
-     * state arriva con la fase corretta e la board fresca.
+     * Quietly updates the board mini-state (offering track,
+     * upper/lower row, turn order tile) with what came from the
+     * server. Does NOT call view.refresh(): the full dump is done
+     * by the following {@code *Turn} event that comes right after
+     * the board broadcast in the server controller. This way the
+     * game-state render shows up with the right phase AND a fresh
+     * board.
      */
     public synchronized void boardSnapshot(Board board) {
         this.currentBoard = board;
     }
 
     /**
-     * Marker di fine bundle dal server. Esegue, in ordine:
-     *   1. {@code view.refresh(this)} \u2014 unico punto in cui il
-     *      client stampa il GAME STATE dump.
-     *   2. flush dei {@link #pendingLogs} accumulati dagli handler
-     *      del bundle (uno per riga, via {@code displayInfo}).
-     *   3. eventuale {@link #pendingError} via {@code displayError}.
-     *   4. eventuale {@link #pendingPrompt}: blocca su stdin
-     *      tenendo ancora il monitor del controller (semantica
-     *      identica al vecchio prompt-dentro-handler).
+     * End-of-bundle marker from the server. Runs, in order:
+     *   1. {@code view.refresh(this)} -- the one and only place
+     *      where the client prints the GAME STATE dump.
+     *   2. flush of {@link #pendingLogs} accumulated by the bundle's
+     *      handlers (one per line, via {@code displayInfo}).
+     *   3. any {@link #pendingError} via {@code displayError}.
+     *   4. any {@link #pendingPrompt}: blocks on stdin while still
+     *      holding the controller monitor (same semantics as the
+     *      old prompt-inside-handler approach).
      *
-     * Tutti gli handler {@code onXxx} si limitano ad aggiornare lo
-     * stato e ad accodare log/prompt; commit \u00e8 l'unico render
-     * path. Vedi {@code VirtualView#onCommit}.
+     * All the {@code onXxx} handlers just update state and queue
+     * logs/prompts; commit is the only render path. See
+     * {@code VirtualView#onCommit}.
      */
     public synchronized void commit() {
         view.refresh(this);
@@ -516,8 +517,8 @@ public class ClientController {
     }
 
     /**
-     * Ricostruisce completamente il mini-stato dallo snapshot ricevuto.
-     * Usato sia all'arrivo iniziale del client che alla riconnessione.
+     * Fully rebuilds the mini-state from the received snapshot. Used
+     * both on initial client arrival and on reconnect.
      */
     public synchronized void gameSnapshot(GameSnapshot s) {
         this.currentPhase = s.getCurrentPhase();
@@ -558,13 +559,13 @@ public class ClientController {
         this.expectedPlayers = s.getExpectedPlayers();
         this.finalLeaderboard = s.getLeaderboard();
         this.finalWinners = s.getWinners();
-        // NB: il dump arriva dal {@link #commit()} che il server
-        // appende dopo l'onGameSnapshot. Qui ci limitiamo a sostituire
-        // lo stato.
+        // NB: the dump comes from the {@link #commit()} that the
+        // server appends after onGameSnapshot. Here we just swap the
+        // state.
     }
 
     // ====================================================================
-    // Helper interno: send con catch di RemoteException
+    // Internal helper: send with RemoteException catch
     // ====================================================================
 
     private interface SafeSend {

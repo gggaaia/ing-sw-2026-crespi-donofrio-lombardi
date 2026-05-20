@@ -3,18 +3,18 @@ package it.polimi.ingsw.common.dto;
 import java.io.Serializable;
 
 /**
- * Identificatore di fase del controller server, trasportato sul
- * filo dentro {@code GameSnapshot} e come singolo campo nel
- * mini-stato del client.
+ * Phase identifier for the server controller, shipped over the wire
+ * inside {@code GameSnapshot} and kept as a single field in the
+ * client's mini-state.
  *
- * Ognuno degli 11 valori \u00e8 una sottoclasse nested con un nome,
- * esposta come singleton {@code public static final}.
+ * Each of the 11 values is a named nested subclass, exposed as a
+ * {@code public static final} singleton.
  *
- * Sul client questo campo serve solo come informazione mostrata
- * all'utente: gli eventi su {@code VirtualView} sono ognuno
- * specifico della propria fase (es. {@code onColorTurn} arriva
- * solo durante {@code COLOR_PICKING}), quindi non c'\u00e8 bisogno
- * di dispatchare sul valore di {@code Phase}.
+ * On the client this is purely informational (something to show
+ * the user): events on {@code VirtualView} are already
+ * phase-specific (e.g. {@code onColorTurn} only fires during
+ * {@code COLOR_PICKING}), so we never need to dispatch on the
+ * {@code Phase} value.
  */
 public abstract class Phase implements Serializable {
 

@@ -12,12 +12,12 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Wire message base per il verso server \u2192 client (trasporto
- * socket). Una classe nested per ogni metodo di {@code VirtualView}.
+ * Base wire message for the server -> client direction (socket
+ * transport). One nested subclass per {@code VirtualView} method.
  *
- * Visitor pattern: il visitor (implementato da
- * {@code Socket_Client} lato client) dispatcha ogni messaggio al
- * metodo {@code visitXxx} corretto.
+ * Visitor pattern: the visitor (implemented by {@code Socket_Client}
+ * on the client side) dispatches each message to the right
+ * {@code visitXxx} method.
  */
 public abstract class ServerToClientMessage implements Serializable {
 
@@ -58,7 +58,7 @@ public abstract class ServerToClientMessage implements Serializable {
         void visitCommit();
     }
 
-    // === classi nested (una per evento) ===
+    // === nested classes (one per event) ===
 
     public static class PlayerJoined extends ServerToClientMessage {
         private static final long serialVersionUID = 1L;
@@ -295,8 +295,8 @@ public abstract class ServerToClientMessage implements Serializable {
     }
 
     /**
-     * Marker di fine bundle: invita il client a fare il refresh
-     * della view e a flushare i log accumulati. Vedi
+     * End-of-bundle marker: tells the client to refresh the view
+     * and flush the accumulated log lines. See
      * {@code VirtualView#onCommit}.
      */
     public static class Commit extends ServerToClientMessage {

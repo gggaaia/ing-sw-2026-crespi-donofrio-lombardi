@@ -8,10 +8,10 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * View JavaFX. Implementazione non ancora scritta: i metodi
- * {@code display*} sono no-op e i {@code prompt*} tirano una
- * {@link UnsupportedOperationException}, cos\u00ec scegliere "gui"
- * all'avvio compila ma fallisce subito a runtime in modo chiaro.
+ * JavaFX view. Not implemented yet: the {@code display*} methods are
+ * no-ops and the {@code prompt*} ones throw
+ * {@link UnsupportedOperationException}, so picking "gui" at startup
+ * compiles fine but fails fast at runtime with a clear message.
  */
 public class GuiView implements View {
 

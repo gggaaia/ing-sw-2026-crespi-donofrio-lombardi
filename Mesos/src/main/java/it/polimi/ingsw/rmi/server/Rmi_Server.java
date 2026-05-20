@@ -10,14 +10,15 @@ import java.rmi.RemoteException;
 import java.util.List;
 
 /**
- * Implementazione lato server di {@link VirtualServer} per il
- * trasporto RMI. Ogni metodo \u00e8 una riga: registrazione (per
- * {@code connect}) + chiamata diretta al {@link ServerController}.
+ * Server-side {@link VirtualServer} implementation for the RMI
+ * transport. Each method is a one-liner: registration (for
+ * {@code connect}) + a direct call to the {@link ServerController}.
  *
- * RMI lo esporta come stub remoto in {@code Server.startRmiServer}.
- * Quando un client RMI invoca un metodo sullo stub, il runtime
- * RMI ne crea un thread worker che esegue il body qui sotto, che
- * a sua volta entra nel monitor del {@code ServerController}.
+ * RMI exports this as a remote stub inside
+ * {@code Server.startRmiServer}. When an RMI client invokes a method
+ * on the stub, the RMI runtime spins up a worker thread that runs
+ * the body below, which in turn enters the {@code ServerController}
+ * monitor.
  */
 public class Rmi_Server implements VirtualServer {
 

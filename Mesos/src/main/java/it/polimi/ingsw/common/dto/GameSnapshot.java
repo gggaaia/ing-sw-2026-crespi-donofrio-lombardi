@@ -12,21 +12,20 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Snapshot completo dello stato di gioco. Viene mandato dal server
- * al client in due casi:
+ * Full snapshot of the game state. The server only sends one in
+ * two cases:
  *
- *   1. Quando un nuovo giocatore entra in lobby (prima connessione)
- *   2. Quando un giocatore si riconnette dopo una disconnessione
+ *   1. When a new player joins the lobby (first connection)
+ *   2. When a player reconnects after a disconnect
  *
- * Durante il gioco normale gli aggiornamenti viaggiano come eventi
- * tipati su {@code VirtualView} (un metodo per evento), non come
- * snapshot.
+ * During normal play, updates travel as typed events on
+ * {@code VirtualView} (one method per event), not as snapshots.
  *
- * Tutti i campi sono final e immutabili dalla prospettiva del client.
- * Molti campi sono significativi solo in certe fasi: ad esempio
- * {@code board} \u00e8 null in lobby, {@code leaderboard} \u00e8 null
- * tranne che a {@code GAME_ENDED}. Il client gestisce questi null
- * leggendoli soltanto quando la fase corrente lo richiede.
+ * All fields are final and immutable from the client's point of
+ * view. Many are meaningful only in certain phases: for example
+ * {@code board} is null in lobby, and {@code leaderboard} is null
+ * outside of {@code GAME_ENDED}. The client deals with these
+ * nulls by reading them only when the current phase requires it.
  */
 public class GameSnapshot implements Serializable {
 

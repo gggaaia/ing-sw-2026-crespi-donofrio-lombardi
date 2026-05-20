@@ -7,67 +7,66 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Interfaccia che il {@code ClientController} usa per parlare con
- * l'utente. Due gruppi di metodi:
+ * The interface the {@code ClientController} uses to talk to the user.
+ * Two flavours of methods:
  *
- *   - display* / refresh: il controller dice alla view "qui c'\u00e8
- *     un evento, mostra qualcosa". Non bloccano.
+ *   - display* / refresh: the controller tells the view "something
+ *     happened, show it". Non-blocking.
  *
- *   - prompt*: il controller chiede all'utente di scegliere. BLOCCANO
- *     finch\u00e9 l'utente non sceglie. Vengono chiamati solo nei
- *     metodi *Turn del ClientController quando il turno \u00e8 quello
- *     dell'utente locale.
+ *   - prompt*: the controller asks the user to pick something. These
+ *     BLOCK until the user answers. Only called from the *Turn methods
+ *     of ClientController when it's actually the local user's turn.
  *
- * Implementazioni: {@code TuiView} (testo) e {@code GuiView} (JavaFX).
+ * Implementations: {@code TuiView} (text) and {@code GuiView} (JavaFX).
  */
 public interface View {
 
-    /** Chiamato all'apertura della connessione. */
+    /** Called once the connection is open. */
     void displayConnected(String host, int port);
 
-    /** Mostra un messaggio informativo generico. */
+    /** Show a generic info message. */
     void displayInfo(String message);
 
-    /** Mostra un messaggio di errore. */
+    /** Show an error message. */
     void displayError(String message);
 
     /**
-     * Re-renderizza lo schermo dal mini-stato corrente del controller.
-     * Chiamato dopo ogni aggiornamento del mini-stato.
+     * Re-renders the screen from the controller's current mini-state.
+     * Called after each mini-state update.
      */
     void refresh(ClientController state);
 
-    /** Prompt iniziale del nickname. Blocca. */
+    /** Initial nickname prompt. Blocks. */
     String promptNickname();
 
-    /** Prompt del numero di giocatori (2-5). Blocca. */
+    /** Asks for the player count (2-5). Blocks. */
     int promptPlayerCount();
 
-    /** Prompt del colore. Blocca. */
+    /** Asks the user to pick a color. Blocks. */
     TotemColor promptColor(Set<TotemColor> available);
 
-    /** Prompt dell'offering tile (indice 0..trackSize-1). Blocca. */
+    /** Asks for an offering tile index (0..trackSize-1). Blocks. */
     int promptOfferingTile(int trackSize);
 
-    /** Prompt degli id delle carte personaggio della upper row. Blocca. */
+    /** Asks which character cards to take from the upper row. Blocks. */
     List<Integer> promptCharacterUpperIds(int budget);
 
-    /** Prompt degli id delle carte personaggio della lower row. Blocca. */
+    /** Asks which character cards to take from the lower row. Blocks. */
     List<Integer> promptCharacterLowerIds(int budget);
 
-    /** Prompt degli id degli edifici della upper row. Blocca. */
+    /** Asks which buildings to buy from the upper row. Blocks. */
     List<Integer> promptBuildingUpperIds(int remaining);
 
-    /** Prompt degli id degli edifici della lower row. Blocca. */
+    /** Asks which buildings to buy from the lower row. Blocks. */
     List<Integer> promptBuildingLowerIds(int remaining);
 
-    /** Prompt della pesca extra: skip, una carta personaggio o una edificio. Blocca. */
+    /** Extra pick prompt: skip, one character card, or one building. Blocks. */
     ExtraPickChoice promptExtraCard();
 
     /**
-     * Risultato del prompt extra-pick. Tre forme: skip, character con
-     * id, building con id. Per evitare di esporre tipi complessi,
-     * usiamo un piccolo record-like.
+     * Result of the extra-pick prompt. Three shapes: skip, character
+     * with id, building with id. Instead of exposing more complex
+     * types we just use a tiny record-like holder.
      */
     final class ExtraPickChoice {
         public final Integer cardId;
@@ -79,7 +78,7 @@ public interface View {
             this.isCharacter = true;
         }
 
-        /** Pesca una carta con dato id. */
+        /** Take the card with the given id. */
         public ExtraPickChoice(Integer cardId, boolean isCharacter) {
             this.cardId = cardId;
             this.isCharacter = isCharacter;

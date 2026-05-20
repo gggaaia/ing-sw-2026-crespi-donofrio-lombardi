@@ -24,42 +24,39 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 
 /**
- * Processo server. Tre responsabilit\u00e0:
+ * Server process. Three jobs:
  *
- *   1. Registry dei client connessi: una {@code Map<String, VirtualView>}
- *      pi\u00f9 un {@code Set<String>} per i client RMI (gli unici per cui
- *      facciamo dispatch asincrono).
+ *   1. Registry of connected clients: a {@code Map<String, VirtualView>}
+ *      plus a {@code Set<String>} tracking the RMI ones (the only
+ *      clients we dispatch to asynchronously).
  *
- *   2. Helper di dispatch verso un singolo client: {@link #send}.
- *      Per i client RMI spawna un thread; per i client socket fa la
- *      chiamata inline (writeObject veloce). Il chiamante \u00e8
- *      sempre il {@link ServerController}, da dentro i suoi metodi
- *      synchronized.
+ *   2. Per-client dispatch helper: {@link #send}. For RMI clients it
+ *      hands off to a dedicated executor; for socket clients it
+ *      runs inline (writeObject is quick). The caller is always the
+ *      {@link ServerController}, from inside its synchronized methods.
  *
- *   3. Bootstrap: avvia il listener RMI, il listener socket, e il
- *      timer di heartbeat (ping periodico di tutti i client per
- *      detectare disconnessioni silenziose).
+ *   3. Bootstrap: spin up the RMI listener, the socket listener, and
+ *      the heartbeat timer (periodic ping of every client to detect
+ *      silent disconnects).
  *
- * Il {@link ServerController} \u00e8 il "cervello"; questo Server \u00e8
- * solo infrastruttura di rete.
+ * The {@link ServerController} is the brain; this Server is just
+ * the networking plumbing.
  */
 public class Server {
 
-    // === Registry condiviso ===
+    // === Shared registry ===
 
     private final Map<String, VirtualView> views = new HashMap<>();
     private final Set<String> rmiClients = new HashSet<>();
 
     /**
-     * Executor a singolo thread per ogni client RMI. Garantisce che
-     * tutte le {@link #send} verso lo stesso client vengano eseguite
-     * nell'ordine in cui sono state submittate. Sostituisce il
-     * vecchio {@code new Thread(task).start()} per send, che
-     * spawnava N thread paralleli e quindi non garantiva l'ordine
-     * di consegna degli eventi al client (es. onCharacterCardsPicked
-     * poteva sorpassare onBuildingPickTurn). I client socket NON
-     * sono qui dentro: sono gi\u00e0 serializzati naturalmente
-     * (task.run() inline + writeObject sotto synchronized).
+     * One single-thread executor per RMI client, so every {@link #send}
+     * to the same client runs in FIFO submit order. Replaces the
+     * old {@code new Thread(task).start()} approach, which fired N
+     * parallel threads and could reorder events on the client side
+     * (e.g. onCharacterCardsPicked could overtake onBuildingPickTurn).
+     * Socket clients aren't tracked here: they're already naturally
+     * serialised (inline task.run() + writeObject under synchronized).
      */
     private final Map<String, ExecutorService> rmiSenders = new HashMap<>();
 
@@ -75,7 +72,7 @@ public class Server {
         return controller;
     }
 
-    // === Registry API (chiamata dagli adapter) ===
+    // === Registry API (called by the network adapters) ===
 
     public synchronized void registerRmi(String nick, VirtualView v) {
         views.put(nick, v);
@@ -94,20 +91,20 @@ public class Server {
             toShutdown = rmiSenders.remove(nick);
         }
         if (toShutdown != null) {
-            // shutdownNow: il client \u00e8 gi\u00e0 considerato disconnesso,
-            // gli eventi pendenti nella coda non interessano pi\u00f9 a
-            // nessuno. Fuori dal monitor per non chiamare metodi
-            // bloccanti tenendo il lock del Server.
+            // shutdownNow: the client is already considered gone, so any
+            // pending events in the queue are irrelevant. Called outside
+            // the monitor to avoid holding the Server lock across a
+            // potentially blocking call.
             toShutdown.shutdownNow();
         }
     }
 
     /**
-     * Versione atomica di {@code unregister} che restituisce {@code true}
-     * solo se il client era effettivamente registrato (e ora non lo \u00e8
-     * pi\u00f9). Usata dal {@code ServerController} per garantire
-     * l'idempotenza della cascata di disconnect quando due thread di
-     * send falliscono in parallelo verso lo stesso client.
+     * Atomic flavour of {@code unregister}: returns {@code true} only
+     * if the client was actually registered (and is now removed).
+     * Used by {@code ServerController} to keep the disconnect cascade
+     * idempotent when two send threads fail in parallel against the
+     * same client.
      */
     public boolean unregisterIfPresent(String nick) {
         boolean wasPresent;
@@ -136,7 +133,7 @@ public class Server {
         return views.containsKey(nick);
     }
 
-    /** Snapshot della mappa views (copia difensiva). */
+    /** Defensive copy of the views map. */
     public synchronized Map<String, VirtualView> snapshotViews() {
         return new HashMap<>(views);
     }
@@ -144,46 +141,45 @@ public class Server {
     // === Dispatch helper ===
 
     /**
-     * Manda una task verso il client con il nickname dato.
+     * Dispatch a task towards the client identified by {@code nick}.
      *
-     * Per RMI: la submitto sull'executor dedicato a quel client (un
+     * For RMI: submit it on that client's dedicated
      * {@link Executors#newSingleThreadExecutor() single thread
-     * executor}). Cos\u00ec multiple {@code send} verso lo stesso
-     * client vengono eseguite in ordine FIFO sullo stesso thread,
-     * mantenendo invariato l'ordine atteso degli eventi (es.
-     * {@code onCharacterCardsPicked} prima di {@code onBuildingPickTurn},
-     * {@code onCommit} dopo gli eventi del bundle, ecc.). Diversi
-     * client RMI hanno executor diversi, quindi la consegna verso
-     * ognuno avviene in parallelo.
+     * executor}, so multiple sends to the same client run in FIFO
+     * order on the same thread. This preserves the expected event
+     * ordering (e.g. {@code onCharacterCardsPicked} before
+     * {@code onBuildingPickTurn}, {@code onCommit} closing a bundle,
+     * etc.). Different RMI clients use different executors, so
+     * delivery across clients still happens in parallel.
      *
-     * Per socket: esegue inline ({@code task.run()}). I socket sono
-     * gi\u00e0 serializzati naturalmente: {@code Server.send} \u00e8
-     * chiamato dentro al monitor del {@code ServerController}, e la
-     * scrittura dentro {@code Socket_VirtualClient.send} \u00e8
-     * sotto {@code synchronized(output)}, quindi due send verso lo
-     * stesso socket non possono interleave.
+     * For socket: just runs inline ({@code task.run()}). Socket writes
+     * are already serialised in practice: {@code Server.send} is
+     * invoked while the {@code ServerController} monitor is held, and
+     * the actual write inside {@code Socket_VirtualClient.send} is
+     * guarded by {@code synchronized(output)}, so two sends to the
+     * same socket can't interleave anyway.
      */
     public void send(String nick, Runnable task) {
         ExecutorService exec = rmiSenderFor(nick);
         if (exec == null) {
-            // Socket: scrittura inline, gi\u00e0 serializzata dal
-            // chiamante (ServerController) e da synchronized(output)
-            // dentro Socket_VirtualClient.send.
+            // Socket: inline write, already serialised by the caller
+            // (ServerController) and by synchronized(output) inside
+            // Socket_VirtualClient.send.
             task.run();
             return;
         }
         try {
             exec.execute(task);
         } catch (RejectedExecutionException ignored) {
-            // Executor gi\u00e0 shut down (client disconnesso): la task
-            // viene scartata, e va bene cos\u00ec.
+            // Executor already shut down (client gone): drop the task,
+            // nothing to do here.
         }
     }
 
     /**
-     * Restituisce l'executor dedicato a {@code nick} se \u00e8 un
-     * client RMI, creandolo al volo la prima volta. Per i client
-     * socket restituisce {@code null} (scrittura inline).
+     * Returns the executor dedicated to {@code nick} if it's an RMI
+     * client, lazily creating it on first use. For socket clients
+     * returns {@code null} (writes happen inline).
      */
     private synchronized ExecutorService rmiSenderFor(String nick) {
         if (!rmiClients.contains(nick)) {

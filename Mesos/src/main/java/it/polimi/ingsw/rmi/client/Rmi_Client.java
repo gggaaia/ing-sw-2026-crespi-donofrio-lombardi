@@ -18,13 +18,13 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Implementazione lato client di {@link VirtualView} per il trasporto
- * RMI. Ogni metodo \u00e8 una riga: chiamata diretta al
- * {@link ClientController}, che aggiorna il mini-stato e fa il
- * prompt all'utente se serve.
+ * Client-side {@link VirtualView} implementation for the RMI
+ * transport. Each method is a one-liner that calls the
+ * {@link ClientController}, which updates the mini-state and prompts
+ * the user when needed.
  *
- * RMI esporta questo oggetto e ne fornisce uno stub al server tramite
- * la chiamata {@code connect(nickname, selfStub)}.
+ * RMI exports this object and hands a stub of it to the server via
+ * the {@code connect(nickname, selfStub)} call.
  */
 public class Rmi_Client implements VirtualView {
 
@@ -43,9 +43,9 @@ public class Rmi_Client implements VirtualView {
         String nickname = controller.promptNickname();
         controller.setNickname(nickname);
         remoteServer.connect(nickname, selfStub);
-        // Aspettiamo qui finch\u00e9 il network thread (un RMI worker)
-        // riceve l'evento onGameEnded e fa countDown sul latch.
-        // Nessun polling: il main thread \u00e8 in wait profonda.
+        // Park here until the network thread (some RMI worker)
+        // receives the onGameEnded event and counts down the latch.
+        // No polling: the main thread is in a real wait.
         try {
             controller.awaitGameEnd();
         } catch (InterruptedException e) {
@@ -55,19 +55,19 @@ public class Rmi_Client implements VirtualView {
         try {
             remoteServer.disconnect(nickname);
         } catch (RemoteException ignored) {
-            // server gi\u00e0 a posto
+            // server already cleaned up, nothing to do
         }
-        // Senza unexport, il listener RMI (thread non-daemon) terrebbe
-        // vivo il JVM dopo che main \u00e8 ritornato. Lo togliamo perch\u00e9
-        // il client esca pulito.
+        // Without unexport, the RMI listener (a non-daemon thread)
+        // would keep the JVM alive after main returns. Unexport here
+        // so the client process actually exits.
         try {
             UnicastRemoteObject.unexportObject(this, true);
         } catch (NoSuchObjectException ignored) {
-            // gi\u00e0 unexportato
+            // already unexported
         }
     }
 
-    // === VirtualView: 1 riga per ogni evento ===
+    // === VirtualView: one line per event ===
 
     @Override public void onPlayerJoined(String nickname) throws RemoteException {
         controller.playerJoined(nickname);
@@ -190,7 +190,7 @@ public class Rmi_Client implements VirtualView {
     }
 
     @Override public void ping() throws RemoteException {
-        // no-op: la mera invocazione \u00e8 il segnale di liveness
+        // no-op: the invocation itself is the liveness signal
     }
 
     @Override public void onCommit() throws RemoteException {

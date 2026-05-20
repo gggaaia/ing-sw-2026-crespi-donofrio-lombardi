@@ -14,8 +14,8 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Formattatori per la TUI. Producono stringhe gi\u00e0 pronte da
- * stampare; non scrivono direttamente su System.out.
+ * Formatting helpers for the TUI. They build strings ready to print;
+ * they don't write to System.out themselves.
  */
 public class TuiPrinter {
 
@@ -24,17 +24,16 @@ public class TuiPrinter {
     public static final String GREEN = "\u001B[32m";
     public static final String BLUE = "\u001B[34m";
     public static final String YELLOW = "\u001B[33m";
-    /** Bold (ANSI SGR 1). Combinabile con i colori sopra. */
+    /** Bold (ANSI SGR 1). Can be combined with the colours above. */
     public static final String BOLD = "\u001B[1m";
-    /** Tag {@code [INFO]} con sfondo verde brillante e testo nero in
-     *  bold, cos\u00ec il marker salta all'occhio anche in mezzo a un
-     *  blocco di output. SGR: 1 = bold, 30 = fg black, 102 = bg bright
-     *  green. */
+    /** {@code [INFO]} tag with bright-green background and bold black
+     *  text, so it really stands out even in the middle of a wall of
+     *  output. SGR: 1 = bold, 30 = fg black, 102 = bg bright green. */
     private static final String INFO_TAG = "\u001B[1;30;102m INFO \u001B[0m";
 
     private static final String nl = System.lineSeparator();
 
-    /** Banner di benvenuto, stampato all'apertura del client. */
+    /** Welcome banner, printed when the client starts. */
     public static String formatBeginGame() {
         String banner = ""
                 + "  \u2588\u2588\u2588\u2588\u2588\u2588   \u2588\u2588\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588  \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588     \u2588\u2588\u2588\u2588\u2588\u2588\u2588     \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588 " + nl
@@ -51,7 +50,7 @@ public class TuiPrinter {
                 + "a Cranio Creations Game" + nl;
     }
 
-    /** Errore boxato in rosso. */
+    /** Red, boxed error message. */
     public static String formatError(String message) {
         String fullMessage = "[ERROR] " + message;
         int length = fullMessage.length();
@@ -67,36 +66,34 @@ public class TuiPrinter {
     }
 
     /**
-     * Formatter ms-precision (HH:mm:ss.SSS). Statico per non
-     * ricostruirlo a ogni messaggio. Il timestamp \u00e8 quello del
-     * momento in cui il client renderizza la riga di INFO; serve
-     * tipicamente per debug di ordine/batching, vedi commento sotto.
+     * ms-precision formatter (HH:mm:ss.SSS). Static so we don't
+     * rebuild it on every message. The timestamp is taken when the
+     * client is about to render the INFO line; mostly handy for
+     * debugging ordering / batching issues, see comment below.
      */
     private static final DateTimeFormatter INFO_TIME_FMT =
             DateTimeFormatter.ofPattern("HH:mm:ss.SSS");
 
     /**
-     * Messaggio informativo (es. "Alice piazza il totem 0"). Il tag
-     * {@code  INFO } \u00e8 stampato con sfondo verde brillante e testo
-     * nero bold; il messaggio stesso \u00e8 in bold. Cos\u00ec
-     * l'utente individua subito gli eventi di gioco anche quando
-     * scorrono velocemente.
+     * Informational message (e.g. "Alice places totem 0"). The
+     * {@code  INFO } tag is drawn with a bright green background and
+     * bold black text; the message itself is bold too. Makes game
+     * events easy to spot even when the output is scrolling fast.
      *
-     * Timestamp di rendering: ogni riga viene prefissata con l'orario
-     * locale (HH:mm:ss.SSS) calcolato nel momento in cui questa
-     * funzione viene chiamata, cio\u00e8 quando il client sta per
-     * stampare l'evento. Serve per diagnosticare se due righe che
-     * appaiono "insieme" sull'output siano davvero arrivate insieme
-     * (timestamps molto vicini) oppure se la console stia bufferizzando
-     * e renderizzando a blocchi (timestamps distanti). Pu\u00f2 essere
-     * tolto in seguito senza impatto funzionale.
+     * Render timestamp: every line is prefixed with the local time
+     * (HH:mm:ss.SSS) taken when this function is called, i.e. right
+     * before the client prints the event. Useful to tell whether two
+     * lines that look "together" on screen actually arrived together
+     * (timestamps very close) or if the console is just buffering and
+     * flushing in chunks (timestamps far apart). Can be dropped later
+     * with no functional impact.
      */
     public static String formatInfo(String message) {
         String ts = LocalTime.now().format(INFO_TIME_FMT);
         return INFO_TAG + " " + ts + " " + BOLD + message + RESET;
     }
 
-    /** Riga compatta per un giocatore. */
+    /** Compact one-block summary for a player. */
     public static String formatPlayerCompact(String nickname,
                                              TotemColor color,
                                              Integer food,
@@ -132,7 +129,7 @@ public class TuiPrinter {
         return sb.toString();
     }
 
-    /** Offering track formattato in colonne. */
+    /** Offering track formatted in columns. */
     public static String formatOfferingTrack(List<OfferingTile> track) {
         String title = " offering track ";
         int numTiles = track.size();
@@ -162,7 +159,7 @@ public class TuiPrinter {
         return sb.toString();
     }
 
-    /** Turn order tile formattata. */
+    /** Boxed view of the turn order tile. */
     public static String formatTurnOrder(TurnOrderTile tot) {
         String title = " turn order tile ";
         TurnOrderSlot[] slots = tot.getTurnOrderSlots();

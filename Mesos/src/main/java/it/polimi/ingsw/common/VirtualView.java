@@ -14,166 +14,166 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Contratto delle chiamate dal server al client. Un metodo per ogni
- * evento di gioco. I parametri portano i dati tipati che il client
- * deve aggiornare nel suo mini-stato locale.
+ * Server-to-client call contract. One method per game event;
+ * parameters carry the typed data the client needs to merge into
+ * its local mini-state.
  *
- * Implementato da {@code Rmi_Client} (lato client RMI) e da
- * {@code Socket_VirtualClient} (lato server, per i client socket).
- * Il {@code ServerController} chiama i metodi su istanze di questa
- * interfaccia: non sa quale dei due implementatori sta sotto.
+ * Implemented by {@code Rmi_Client} (on the RMI client side) and by
+ * {@code Socket_VirtualClient} (on the server side, for socket
+ * clients). The {@code ServerController} calls methods on instances
+ * of this interface without knowing which transport is behind it.
  *
- * I metodi sono di due tipi:
- *   - broadcast (la maggior parte): mandati a tutti i client connessi
+ * Two flavours of methods:
+ *   - broadcast (most of them): sent to every connected client
  *   - single-player (3): {@code onActionRejected}, {@code onGameSnapshot},
- *     {@code ping} -- destinati solo a un singolo client
+ *     {@code ping} -- targeted at a single client
  *
- * Il client, ricevendo un evento, aggiorna il proprio mini-stato e,
- * se l'evento contiene il proprio nickname e richiede input, fa
- * partire il prompt per l'utente.
+ * On each event the client updates its mini-state and, if the event
+ * targets its own nickname and asks for input, kicks off the
+ * user prompt.
  */
 public interface VirtualView extends Remote {
 
-    // === EVENTI LOBBY (broadcast) ===
+    // === LOBBY EVENTS (broadcast) ===
 
-    /** Un nuovo giocatore si \u00e8 unito alla lobby. */
+    /** A new player joined the lobby. */
     void onPlayerJoined(String nickname) throws RemoteException;
 
-    /** Il primo giocatore (con il nickname dato) deve impostare il numero di partecipanti. */
+    /** First player (with the given nickname) needs to set the participant count. */
     void onAwaitPlayerCount(String firstPlayerNickname) throws RemoteException;
 
-    /** Il numero di partecipanti \u00e8 stato fissato. */
+    /** Participant count has been fixed. */
     void onPlayerCountSet(int count) throws RemoteException;
 
-    /** Lobby in attesa di altri giocatori. */
+    /** Lobby still waiting for more players. */
     void onAwaitMorePlayers(int joined, int total) throws RemoteException;
 
-    // === EVENTI COLOR PICKING (broadcast) ===
+    // === COLOR PICKING EVENTS (broadcast) ===
 
-    /** Tocca al giocatore con questo nickname scegliere un colore. */
+    /** It's this player's turn to pick a colour. */
     void onColorTurn(String nickname, Set<TotemColor> available) throws RemoteException;
 
-    /** Il giocatore ha scelto un colore. */
+    /** The player picked a colour. */
     void onColorPicked(String nickname, TotemColor color) throws RemoteException;
 
-    // === EVENTI INIZIO/PROGRESSO MATCH (broadcast) ===
+    // === MATCH START / PROGRESS EVENTS (broadcast) ===
 
-    /** La partita \u00e8 partita. */
+    /** The match started. */
     void onMatchStarted(List<String> playerOrder, Era startingEra) throws RemoteException;
 
-    /** L'era \u00e8 cambiata. */
+    /** Era changed. */
     void onEraChanged(Era newEra) throws RemoteException;
 
-    /** Un nuovo round \u00e8 iniziato. */
+    /** A new round started. */
     void onRoundStarted(int round) throws RemoteException;
 
-    // === EVENTI TURN FLOW (broadcast) ===
+    // === TURN FLOW EVENTS (broadcast) ===
 
-    /** Tocca al giocatore piazzare il totem sull'offering tile. */
+    /** The player's turn to place their totem on the offering tile. */
     void onOfferingTileTurn(String nickname, int trackSize) throws RemoteException;
 
-    /** Il giocatore ha piazzato il totem sulla tile. */
+    /** The player placed their totem on the tile. */
     void onOfferingTilePicked(String nickname, int tileIndex) throws RemoteException;
 
-    /** Tocca al giocatore scegliere carte personaggio. */
+    /** The player's turn to pick character cards. */
     void onCharacterPickTurn(String nickname, int upperBudget, int lowerBudget) throws RemoteException;
 
-    /** Il giocatore ha scelto carte personaggio. */
+    /** The player picked character cards. */
     void onCharacterCardsPicked(String nickname,
                                 List<CharacterCard> upper,
                                 List<CharacterCard> lower) throws RemoteException;
 
-    /** Tocca al giocatore comprare edifici. */
+    /** The player's turn to buy buildings. */
     void onBuildingPickTurn(String nickname, int upperRemaining, int lowerRemaining) throws RemoteException;
 
-    /** Il giocatore ha comprato edifici. */
+    /** The player bought buildings. */
     void onBuildingCardsBought(String nickname,
                                List<BuildingCard> upper,
                                List<BuildingCard> lower) throws RemoteException;
 
-    /** Tocca al giocatore fare la pesca extra (special building). */
+    /** The player's turn to make the extra pick (special building). */
     void onExtraPickTurn(String nickname) throws RemoteException;
 
-    /** Il giocatore ha fatto la pesca extra (o skippato se cardId=null). */
+    /** The player took the extra pick (or skipped it if cardId=null). */
     void onExtraCardPicked(String nickname, Integer cardId, boolean isCharacter) throws RemoteException;
 
-    // === EVENTI RISORSE (broadcast) ===
+    // === RESOURCE EVENTS (broadcast) ===
 
-    /** Il prestigio del giocatore \u00e8 cambiato. */
+    /** The player's prestige changed. */
     void onPrestigeChanged(String nickname, int newPrestige) throws RemoteException;
 
-    /** Il cibo del giocatore \u00e8 cambiato. */
+    /** The player's food changed. */
     void onFoodChanged(String nickname, int newFood) throws RemoteException;
 
-    // === EVENTI FINE ROUND / FINE PARTITA (broadcast) ===
+    // === ROUND/GAME END EVENTS (broadcast) ===
 
-    /** Il round corrente \u00e8 terminato. */
+    /** Current round is over. */
     void onRoundEnded() throws RemoteException;
 
-    /** La partita \u00e8 finita. */
+    /** Match is over. */
     void onGameEnded(List<String> leaderboard, List<String> winners) throws RemoteException;
 
-    // === EVENTI PAUSE / RECONNECT (broadcast) ===
+    // === PAUSE / RECONNECT EVENTS (broadcast) ===
 
-    /** La partita \u00e8 in pausa (es. un solo giocatore connesso). */
+    /** Match paused (e.g. only one player still connected). */
     void onMatchPaused(String reason) throws RemoteException;
 
-    /** La partita \u00e8 ripresa. */
+    /** Match resumed. */
     void onMatchResumed() throws RemoteException;
 
-    /** Un giocatore si \u00e8 disconnesso. */
+    /** A player disconnected. */
     void onPlayerDisconnected(String nickname) throws RemoteException;
 
-    /** Un giocatore si \u00e8 riconnesso. */
+    /** A player reconnected. */
     void onPlayerReconnected(String nickname) throws RemoteException;
 
-    // === EVENTI SINGLE-PLAYER ===
+    // === SINGLE-PLAYER EVENTS ===
 
     /**
-     * Il connect del client \u00e8 stato rifiutato (es. nessuna partita
-     * sta accettando giocatori, lobby piena, partita in corso). Il
-     * client mostra l'errore e chiude la propria connessione.
+     * The client's connect attempt was refused (e.g. no match is
+     * accepting players, lobby is full, a match is already in
+     * progress). The client shows the error and tears down its own
+     * connection.
      */
     void onNicknameRejected(String reason) throws RemoteException;
 
-    /** L'azione (in-gioco) del chiamante \u00e8 stata rifiutata dal server. */
+    /** An in-game action from the caller was refused by the server. */
     void onActionRejected(String reason) throws RemoteException;
 
-    /** Snapshot completo dello stato del gioco (per join in lobby o riconnessione). */
+    /** Full snapshot of the game state (for lobby join or reconnect). */
     void onGameSnapshot(GameSnapshot snapshot) throws RemoteException;
 
     /**
-     * Snapshot leggero della sola {@link Board}, mandato dal server
-     * prima di un evento {@code *Turn} che richiede al giocatore di
-     * scegliere su uno stato fresco della board (offering track,
-     * upper/lower row, turn order tile). A differenza di
-     * {@link #onGameSnapshot}, NON triggera un re-render della view:
-     * aggiorna in modo silenzioso il mini-stato locale della board,
-     * cos\u00ec il successivo {@code *Turn} ha la board pronta da
-     * stampare.
+     * Lightweight snapshot of just the {@link Board}, sent by the
+     * server right before a {@code *Turn} event that needs the
+     * player to pick on a fresh board state (offering track,
+     * upper/lower row, turn order tile). Unlike
+     * {@link #onGameSnapshot}, this does NOT trigger a view refresh:
+     * it silently updates the local board mini-state, so the
+     * following {@code *Turn} already has the right board to print.
      */
     void onBoardSnapshot(Board board) throws RemoteException;
 
     /**
-     * Heartbeat. Body vuoto: serve solo a verificare che il client
-     * sia raggiungibile. Una {@code RemoteException} dice al server
-     * "questo client \u00e8 morto".
+     * Heartbeat. Empty body: only used to check the client is still
+     * reachable. A {@code RemoteException} tells the server "this
+     * client is dead".
      */
     void ping() throws RemoteException;
 
     /**
-     * Marca la fine di un batch logico di eventi (es. "il giocatore ha
-     * fatto il pick", "fine round", "match started") e dice al client
-     * che ora pu\u00f2 renderizzare. \u00c8 l'UNICO punto in cui il
-     * client fa un {@code view.refresh}; tutti gli {@code onXxx}
-     * precedenti nel bundle si limitano ad aggiornare il mini-stato e
-     * accodare log line.
+     * End-of-bundle marker for a logical batch of events (e.g. "the
+     * player did a pick", "round ended", "match started"), telling
+     * the client it can render now. This is the ONLY place where the
+     * client calls {@code view.refresh}; every preceding {@code onXxx}
+     * in the bundle just updates the mini-state and queues a log
+     * line.
      *
-     * Regola server: ogni broadcast/sendToNickname che produce un
-     * cambiamento visibile all'utente deve concludersi con
-     * {@code v.onCommit()} (vedi gli helper {@code broadcastAndCommit}
-     * / {@code sendToNicknameAndCommit} in {@code ServerController}).
-     * Senza commit il client riceve i delta ma non aggiorna lo schermo.
+     * Server-side rule: every broadcast/sendToNickname that produces
+     * a user-visible change must finish with {@code v.onCommit()}
+     * (see the {@code broadcastAndCommit} / {@code sendToNicknameAndCommit}
+     * helpers in {@code ServerController}). Without commit the
+     * client receives the deltas but never repaints the screen.
      */
     void onCommit() throws RemoteException;
 }

@@ -16,14 +16,16 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Implementazione lato server di {@link VirtualView} per i client
- * collegati via socket. Ogni metodo: una riga, impacchetta i
- * parametri in un {@link ServerToClientMessage} e scrive sul socket.
+ * Server-side {@link VirtualView} implementation for socket-connected
+ * clients. Each method is a one-liner that wraps its parameters into
+ * a {@link ServerToClientMessage} and writes it to the socket.
  *
- * Dalla prospettiva del {@link it.polimi.ingsw.controller.server.ServerController},
- * questa classe \u00e8 identica a uno stub RMI di {@link VirtualView}:
- * lui chiama {@code view.onColorPicked(...)}, qui dentro il body
- * impacchetta e manda.
+ * From the
+ * {@link it.polimi.ingsw.controller.server.ServerController}'s point
+ * of view this class is interchangeable with an RMI stub of
+ * {@link VirtualView}: the controller calls
+ * {@code view.onColorPicked(...)} and the body here just packs and
+ * sends it.
  */
 public class Socket_VirtualClient implements VirtualView {
 
@@ -33,7 +35,7 @@ public class Socket_VirtualClient implements VirtualView {
         this.output = output;
     }
 
-    // Ogni metodo wrappa i parametri in un ServerToClientMessage e li scrive sul socket.
+    // Each method wraps its parameters in a ServerToClientMessage and writes it to the socket.
 
     @Override public void onPlayerJoined(String nick) throws RemoteException {
         send(new ServerToClientMessage.PlayerJoined(nick));
@@ -156,10 +158,10 @@ public class Socket_VirtualClient implements VirtualView {
     }
 
     @Override public void ping() throws RemoteException {
-        // Per i socket l'heartbeat \u00e8 una writeObject che pu\u00f2 fallire
-        // se il client \u00e8 morto; un messaggio nuovo non serve perch\u00e9
-        // la disconnessione viene catturata dal reader nel
-        // Socket_ClientHandler. Lasciamo il body vuoto.
+        // For sockets the heartbeat would just be a writeObject that
+        // could fail if the client is dead; we don't need a dedicated
+        // message because the disconnect is already caught by the
+        // reader in Socket_ClientHandler. Body left empty on purpose.
     }
 
     @Override public void onCommit() throws RemoteException {

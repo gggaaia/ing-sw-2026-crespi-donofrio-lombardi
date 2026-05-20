@@ -11,12 +11,12 @@ import java.io.ObjectInputStream;
 import java.util.List;
 
 /**
- * Lato server, una istanza per ogni connessione socket. Legge in loop
- * {@link ClientToServerMessage} dallo stream e li dispatcha al
- * {@link ServerController} tramite il visitor pattern.
+ * Server-side, one instance per socket connection. Loops reading
+ * {@link ClientToServerMessage} off the stream and dispatches each
+ * to the {@link ServerController} via the visitor pattern.
  *
- * I corpi dei metodi visit* sono identici a quelli di {@code Rmi_Server}:
- * registrazione + chiamata diretta al controller.
+ * The visit* bodies match {@code Rmi_Server}'s: registration +
+ * direct call to the controller.
  */
 public class Socket_ClientHandler implements ClientToServerMessage.Visitor {
 
@@ -42,7 +42,7 @@ public class Socket_ClientHandler implements ClientToServerMessage.Visitor {
                 msg.accept(this);
             }
         } catch (EOFException eof) {
-            // disconnect pulito; gestito nel finally
+            // clean disconnect; handled in the finally block
         } catch (IOException io) {
             System.err.println("Socket read error for " + boundNickname + ": " + io.getMessage());
         } catch (ClassNotFoundException | ClassCastException malformed) {

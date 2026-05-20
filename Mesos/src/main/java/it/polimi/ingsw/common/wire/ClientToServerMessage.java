@@ -6,12 +6,12 @@ import java.io.Serializable;
 import java.util.List;
 
 /**
- * Wire message base per il verso client \u2192 server (trasporto
- * socket). Una classe nested per ogni metodo di {@code VirtualServer}.
+ * Base wire message for the client -> server direction (socket
+ * transport). One nested subclass per {@code VirtualServer} method.
  *
- * Discrimina via Visitor pattern: la classe concreta sa quale
- * {@code visitXxx} chiamare. Il visitor \u00e8 implementato da
- * {@code Socket_ClientHandler}, lato server.
+ * Dispatch happens via the Visitor pattern: the concrete subclass
+ * knows which {@code visitXxx} to call. The visitor is implemented
+ * by {@code Socket_ClientHandler} on the server side.
  */
 public abstract class ClientToServerMessage implements Serializable {
 

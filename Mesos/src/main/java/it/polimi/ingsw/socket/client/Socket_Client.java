@@ -19,15 +19,17 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Adapter client-side per il trasporto socket. Tre cose:
- *   1. crea un {@link Socket_VirtualServer} e lo dà al ClientController
- *      (che lo user\u00e0 come VirtualServer per mandare azioni)
- *   2. fa il prompt iniziale del nickname e manda il primo connect
- *   3. legge in loop i {@link ServerToClientMessage} dal socket e li
- *      dispatcha al ClientController tramite visitor pattern
+ * Client-side adapter for the socket transport. Three things:
+ *   1. builds a {@link Socket_VirtualServer} and hands it to the
+ *      ClientController (which uses it as the VirtualServer for
+ *      outgoing actions)
+ *   2. does the initial nickname prompt and sends the first connect
+ *   3. loops reading {@link ServerToClientMessage} off the socket
+ *      and dispatches each one to the ClientController via the
+ *      visitor pattern
  *
- * I corpi dei metodi visit* sono identici a quelli di {@code Rmi_Client}:
- * chiamata diretta al ClientController.
+ * The visit* bodies are basically identical to {@code Rmi_Client}'s:
+ * a direct call to the ClientController.
  */
 public class Socket_Client implements ServerToClientMessage.Visitor {
 
@@ -46,8 +48,9 @@ public class Socket_Client implements ServerToClientMessage.Visitor {
         String nickname = controller.promptNickname();
         controller.setNickname(nickname);
 
-        // Spawn reader thread PRIMA di mandare connect: cos\u00ec se il server
-        // ci risponde subito con onGameSnapshot lo possiamo ricevere.
+        // Spawn the reader thread BEFORE sending connect: that way if
+        // the server replies immediately with onGameSnapshot we can
+        // actually receive it.
         Thread reader = new Thread(new Runnable() {
             @Override public void run() {
                 readLoop();
@@ -63,12 +66,11 @@ public class Socket_Client implements ServerToClientMessage.Visitor {
             return;
         }
 
-        // Aspettiamo qui finch\u00e9 il reader thread riceve l'evento
-        // onGameEnded e fa countDown sul latch. Nessun polling: il main
-        // thread \u00e8 in wait profonda. Tenere vivo main qui \u00e8
-        // ESSENZIALE perch\u00e9 il reader thread \u00e8 daemon: se main
-        // ritornasse, il JVM ucciderebbe il reader prima ancora che la
-        // partita sia iniziata.
+        // Park here until the reader thread receives the onGameEnded
+        // event and counts down the latch. No polling: main is in a
+        // proper wait. Keeping main alive here is ESSENTIAL because
+        // the reader thread is a daemon: if main returned, the JVM
+        // would kill the reader before the match even starts.
         try {
             controller.awaitGameEnd();
         } catch (InterruptedException e) {

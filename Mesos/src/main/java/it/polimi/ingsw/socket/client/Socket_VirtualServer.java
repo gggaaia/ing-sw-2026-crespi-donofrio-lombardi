@@ -11,14 +11,15 @@ import java.rmi.RemoteException;
 import java.util.List;
 
 /**
- * Implementazione lato client di {@link VirtualServer} per il trasporto
- * socket. Ogni metodo: una riga, impacchetta i parametri in un
- * {@link ClientToServerMessage} e scrive sul socket.
+ * Client-side {@link VirtualServer} implementation for the socket
+ * transport. Each method is a one-liner that wraps its parameters
+ * in a {@link ClientToServerMessage} and writes it to the socket.
  *
- * Dalla prospettiva del {@link it.polimi.ingsw.controller.client.ClientController},
- * questa classe \u00e8 identica a uno stub RMI: lui chiama
- * {@code virtualServer.pickColor(...)}, qui dentro il body
- * impacchetta e manda.
+ * From the
+ * {@link it.polimi.ingsw.controller.client.ClientController}'s point
+ * of view this is interchangeable with an RMI stub: the controller
+ * calls {@code virtualServer.pickColor(...)} and the body here just
+ * packs and ships it.
  */
 public class Socket_VirtualServer implements VirtualServer {
 

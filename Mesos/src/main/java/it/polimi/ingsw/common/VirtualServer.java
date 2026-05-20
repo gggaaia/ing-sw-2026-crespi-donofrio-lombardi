@@ -7,64 +7,65 @@ import java.rmi.RemoteException;
 import java.util.List;
 
 /**
- * Contratto delle chiamate dal client al server. Ogni metodo
- * corrisponde a un'azione del giocatore: ogni parametro \u00e8 un dato
- * tipato (numeri, enum, liste di id, stringhe), niente DTO grossi.
+ * Client-to-server call contract. One method per player action;
+ * parameters are simple typed values (numbers, enums, lists of ids,
+ * strings), no big DTOs flying around.
  *
- * Implementato da {@code Rmi_Server} e da {@code Socket_VirtualServer}.
- * I controller (client e server) parlano sempre attraverso questa
- * interfaccia: non sanno quale dei due implementatori sta sotto.
+ * Implemented by {@code Rmi_Server} and {@code Socket_VirtualServer}.
+ * Both the client and server controllers always talk through this
+ * interface, so they don't know (or care) which transport is below.
  *
- * Il server identifica il chiamante dal nickname passato in ogni
- * metodo. Non c'\u00e8 autenticazione: il modello di identit\u00e0
- * \u00e8 basato sul trust che il client non menta sul proprio nickname.
+ * The server identifies the caller via the nickname passed into
+ * every method. There's no authentication: identity is a pure
+ * trust-the-client model.
  */
 public interface VirtualServer extends Remote {
 
     /**
-     * Prima chiamata che ogni client fa. Porta il nickname richiesto e
-     * la propria VirtualView (il back-channel server-to-client).
+     * The first call every client makes. Carries the requested
+     * nickname and its own VirtualView (the server-to-client
+     * back-channel).
      */
     void connect(String nickname, VirtualView client) throws RemoteException;
 
     /**
-     * Disconnessione esplicita. Il client comunica al server che sta
-     * uscendo. Server e client si liberano delle risorse.
+     * Explicit disconnect: the client tells the server it's leaving,
+     * both sides drop the associated resources.
      */
     void disconnect(String nickname) throws RemoteException;
 
     /**
-     * Il primo giocatore sceglie quanti partecipanti avr\u00e0 la
-     * partita. Accettato solo durante {@code WAITING_FOR_PLAYER_COUNT}.
+     * The first player picks how many participants the match will
+     * have. Only accepted during {@code WAITING_FOR_PLAYER_COUNT}.
      */
     void setPlayerCount(String nickname, int count) throws RemoteException;
 
     /**
-     * Sceglie il colore del totem per il chiamante. Accettato solo
-     * durante {@code COLOR_PICKING}, dal giocatore al turno.
+     * Pick the caller's totem colour. Only accepted during
+     * {@code COLOR_PICKING}, from the player whose turn it is.
      */
     void pickColor(String nickname, TotemColor color) throws RemoteException;
 
     /**
-     * Posiziona il totem sulla tile dell'offering track al dato indice.
-     * Accettato solo durante {@code PICK_OFFERING_TILE}, dal giocatore
-     * il cui turno \u00e8 corrente.
+     * Place the totem on the offering-track tile at the given index.
+     * Only accepted during {@code PICK_OFFERING_TILE}, from the
+     * current player.
      */
     void pickOfferingTile(String nickname, int tileIndex) throws RemoteException;
 
     /**
-     * Sceglie carte personaggio dalle file (upper / lower) per id,
-     * entro i budget fissati dalla tile dell'offering. Accettato solo
-     * durante {@code TURN_PICK_CARDS_CHARACTER}. Le liste possono
-     * essere vuote.
+     * Pick character cards from the upper/lower rows by id, within
+     * the budgets fixed by the chosen offering tile. Only accepted
+     * during {@code TURN_PICK_CARDS_CHARACTER}. Either list can be
+     * empty.
      */
     void pickCharacterCards(String nickname,
                             List<Integer> upperRowIds,
                             List<Integer> lowerRowIds) throws RemoteException;
 
     /**
-     * Compra carte edificio dalle file (upper / lower) per id, entro i
-     * budget residui e il cibo. Accettato solo durante
+     * Buy building cards from the upper/lower rows by id, paying with
+     * the remaining budgets plus food. Only accepted during
      * {@code TURN_PICK_CARDS_BUILDING}.
      */
     void pickBuildingCards(String nickname,
@@ -72,10 +73,11 @@ public interface VirtualServer extends Remote {
                            List<Integer> lowerRowIds) throws RemoteException;
 
     /**
-     * Esegue la pesca extra opzionale concessa dall'edificio speciale.
-     * {@code cardId == null} significa "salta"; {@code isCharacter}
-     * dice al server se la carta scelta \u00e8 personaggio o edificio.
-     * Accettato solo durante {@code RESET_TURN_ORDER_AND_PICK_EXTRA_BUILDING}.
+     * Optional extra pick granted by the special building.
+     * {@code cardId == null} means "skip"; {@code isCharacter} tells
+     * the server whether the picked card is a character or a
+     * building. Only accepted during
+     * {@code RESET_TURN_ORDER_AND_PICK_EXTRA_BUILDING}.
      */
     void pickExtraCard(String nickname,
                        Integer cardId,

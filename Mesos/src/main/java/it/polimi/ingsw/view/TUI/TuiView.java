@@ -20,15 +20,15 @@ import java.util.Scanner;
 import java.util.Set;
 
 /**
- * View testuale. Stampa su System.out, legge da System.in via uno
- * Scanner condiviso. I formattatori grafici (banner, errori boxati,
- * board overview) sono in {@link TuiPrinter}.
+ * Text-based view. Writes to System.out and reads from System.in
+ * through a shared Scanner. All the actual ASCII art / formatting
+ * (banner, boxed errors, board overview) lives in {@link TuiPrinter}.
  *
- * Concorrenza: i metodi display* / refresh sono chiamati dal thread di
- * rete; i prompt* dal thread del ClientController. Per evitare che i
- * messaggi di display "spezzino" un prompt in corso, ogni write a
- * System.out passa da {@code outLock} e re-stampa il prompt se
- * presente.
+ * Threading note: display* / refresh are called from the network
+ * thread, prompt* from the ClientController thread. To avoid display
+ * messages cutting through a prompt that's currently waiting for
+ * input, every write to System.out goes through {@code outLock} and
+ * re-prints the prompt if one is active.
  */
 public class TuiView implements View {
 
@@ -37,10 +37,8 @@ public class TuiView implements View {
     private String activePrompt;
 
     /**
-     * Separatore visivo lungo, stampato all'inizio e alla fine di ogni
-     * dump di {@code refresh}. Una linea lunga rende molto pi\u00f9
-     * evidente il passaggio da una fase di gioco alla successiva
-     * rispetto al vecchio "==================" da 18 caratteri.
+     * Long visual separator printed at the start and end of every
+     * {@code refresh} dump.
      */
     private static final String LONG_SEP =
             "================================================================";
@@ -65,21 +63,22 @@ public class TuiView implements View {
 
     @Override
     public void refresh(ClientController state) {
-        // Pre-match: in lobby (waiting nickname/count/players) e in
-        // color picking, lato server i Player non sono ancora stati
-        // creati (succede in {@code acceptColorPick}), quindi
-        // food/prestige non sono noti al client e il dump
-        // mostrerebbe solo "Food: ? | PP: ?". L'utente in queste
-        // fasi vede comunque l'INFO log e i prompt; il primo dump
-        // utile arriva al primo {@code *Turn} di gioco con i valori
-        // iniziali a 0 broadcastati da {@code startMatch}.
+        // Pre-match: during lobby (waiting nickname/count/players) and
+        // color picking, server-side the Player objects don't exist
+        // yet (they're built in the server during acceptColorPick), 
+        // so food/prestige aren't known on the client and the dump 
+        // would just say "Food: ? | PP: ?". 
+        // User still sees INFO logs and prompts in these phases; 
+        // the first useful dump shows up on the first *Turn of the actual game, 
+        // with the initial zeros that startMatch broadcasts.
+        
         if (isPreMatchPhase(state.getCurrentPhase())) {
             return;
         }
         StringBuilder sb = new StringBuilder();
         String nl = System.lineSeparator();
-        // Cornice di apertura: linea lunga + banner centrato. Aiuta a
-        // separare visivamente i dump di game state successivi.
+        // Opening frame: long line + centred banner. Helps tell
+        // consecutive game-state dumps apart at a glance.
         sb.append(TuiPrinter.BLUE).append(LONG_SEP).append(TuiPrinter.RESET).append(nl);
         sb.append(TuiPrinter.BLUE).append(GAME_STATE_HEADER).append(TuiPrinter.RESET).append(nl);
         sb.append("phase:    ").append(state.getCurrentPhase()).append(nl);
@@ -98,11 +97,10 @@ public class TuiView implements View {
             sb.append("winners:     ").append(state.getFinalWinners()).append(nl);
         }
         sb.append(TuiPrinter.BLUE).append(LONG_SEP).append(TuiPrinter.RESET);
-        // NB: l'eventuale pendingError NON viene stampato qui. Lo
-        // gestisce il {@link ClientController#commit()}, che dopo il
-        // dump chiama {@code view.displayError(err)} se serve. Cos\u00ec
-        // ordine sullo schermo \u00e8 sempre: dump, log lines, error,
-        // prompt.
+        // NB: pendingError is NOT printed here. That's handled by
+        // ClientController#commit(), which calls view.displayError(err)
+        // after the dump if needed. This way the on-screen order stays
+        // consistent: dump, log lines, error, prompt.
         emitLine(sb.toString());
     }
 
@@ -193,7 +191,7 @@ public class TuiView implements View {
         }
     }
 
-    // === helper interni ===
+    // === internal helpers ===
 
     private int promptInt(String prompt) {
         while (true) {
@@ -222,20 +220,20 @@ public class TuiView implements View {
     }
 
     /**
-     * Stampa il prompt e legge una riga dallo Scanner condiviso.
+     * Prints the prompt and reads a line from the shared Scanner.
      *
-     * Importante: il prompt viene stampato con {@code println} (quindi
-     * con newline finale) e l'input \u00e8 letto dalla riga successiva
-     * dopo un piccolo "{@code > }".
+     * Note: the prompt is printed with {@code println} (so it ends
+     * with a newline) and input is read from the next line, after a
+     * small "{@code > }".
      *
-     * Motivo: alcune console (in particolare la run-console di IntelliJ)
-     * bufferizzano stdout per riga e NON sempre rispettano un
-     * {@code System.out.flush()} su un {@code print()} senza newline
-     * finale. Il sintomo era che il secondo prompt back-to-back (es. la
-     * lower row dopo la upper row) non comparisse fino al primo Enter
-     * successivo, che veniva nel frattempo consumato come input vuoto.
-     * Terminare il prompt con newline forza il flush della riga in
-     * qualunque console.
+     * Reason: some consoles (IntelliJ's run console in particular)
+     * buffer stdout line by line and don't always honor a
+     * {@code System.out.flush()} on a {@code print()} without a
+     * trailing newline. The symptom was that the second back-to-back
+     * prompt (e.g. the lower row right after the upper row) didn't
+     * show up until the next Enter, which then got eaten as empty
+     * input. Ending the prompt with a newline forces the line to
+     * flush on any console.
      */
     private String promptLine(String prompt) {
         synchronized (outLock) {
@@ -264,11 +262,11 @@ public class TuiView implements View {
     }
 
     /**
-     * Vero se la fase corrente \u00e8 una fase pre-match in cui il dump
-     * di GAME STATE non ha senso (nessun Player creato, nessun board,
-     * nessun food/prestige). Include anche il caso {@code null}, che
-     * \u00e8 lo stato iniziale del client appena prima del primo
-     * evento dal server.
+     * True if the current phase is a pre-match one where the GAME
+     * STATE dump doesn't make sense (no Player yet, no board, no
+     * food/prestige). The {@code null} case is included too, which
+     * is the client's initial state before the first event from the
+     * server.
      */
     private static boolean isPreMatchPhase(Phase p) {
         if (p == null) return true;
@@ -278,15 +276,15 @@ public class TuiView implements View {
                 || p instanceof Phase.ColorPicking;
     }
 
-    // === board / players overview (chiamate da refresh) ===
+    // === board / players overview (called from refresh) ===
 
     /**
-     * Appende un riassunto multiriga e leggibile della board a {@code sb}:
-     * la turn order tile (con food/PP per slot e occupante corrente),
-     * la upper / lower row (id e classe di ogni carta + costo/PP per
-     * gli edifici), e l'offering track (lettera, top/bottom, food,
-     * occupante corrente). I formattatori boxati vivono in
-     * {@link TuiPrinter}; qui sopra c'\u00e8 la sequenza di blocchi.
+     * Appends a readable, multi-line summary of the board to {@code sb}:
+     * the turn order tile (food/PP per slot and current occupant),
+     * the upper/lower rows (id and class of every card + cost/PP for
+     * buildings), and the offering track (letter, top/bottom, food,
+     * current occupant). The boxed formatters live in
+     * {@link TuiPrinter}; here we just decide the order of the blocks.
      */
     private void appendBoardOverview(StringBuilder sb, Board board, String nl) {
         TurnOrderTile tot = board.getTurnOrderTile();
@@ -305,10 +303,9 @@ public class TuiView implements View {
     }
 
     /**
-     * Appende il blocco di una singola CardRow (upper o lower):
-     * personaggi, edifici, eventi. Se la lista \u00e8 vuota stampa
-     * "(none)" cos\u00ec l'utente vede esplicitamente che la riga
-     * \u00e8 vuota.
+     * Appends the block for a single CardRow (upper or lower):
+     * characters, buildings, events. If the list is empty it prints
+     * "(none)" so the user can clearly tell the row is empty.
      */
     private void appendRow(StringBuilder sb, String label, CardRow row, String nl) {
         if (row == null) return;

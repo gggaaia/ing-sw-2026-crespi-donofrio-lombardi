@@ -33,76 +33,77 @@ import java.util.Timer;
 import java.util.TimerTask;
 
 /**
- * Controller server-side. Tiene lo stato del gioco e gestisce le
- * transizioni di fase tramite {@link PhaseLogic}.
+ * Server-side controller. Holds the game state and handles phase
+ * transitions through {@link PhaseLogic}.
  *
- * Schema:
- *   - i metodi pubblici corrispondono uno a uno ai metodi di
- *     {@link it.polimi.ingsw.common.VirtualServer} e sono synchronized.
- *     Delegano al {@code phase} corrente con dispatch polimorfico.
- *   - {@code PhaseLogic} fa il dispatch: se l'azione \u00e8 ammessa
- *     nella fase corrente chiama un metodo {@code accept*} di questo
- *     controller; altrimenti chiama {@code rejectAction}.
- *   - i metodi {@code accept*} fanno: validazione fine + mutazione
- *     del model + broadcast di eventi alle VirtualView dei client.
- *   - i broadcast usano {@link Server#send}, che spawna un thread
- *     dedicato per i client RMI (le chiamate remote possono essere
- *     lente) e fa una scrittura inline per i client socket.
+ * Layout:
+ *   - public methods match {@link it.polimi.ingsw.common.VirtualServer}
+ *     one-to-one and are all synchronized. They delegate to the
+ *     current {@code phase} via polymorphic dispatch.
+ *   - {@code PhaseLogic} does the dispatch: if the action is allowed
+ *     in the current phase it calls an {@code accept*} method on this
+ *     controller; otherwise it calls {@code rejectAction}.
+ *   - the {@code accept*} methods do the fine-grained validation,
+ *     mutate the model, and broadcast events to the clients'
+ *     VirtualViews.
+ *   - broadcasts go through {@link Server#send}, which uses a
+ *     per-client RMI executor (remote calls can be slow) and an
+ *     inline write for socket clients.
  *
- * Lock: tutto sotto un unico monitor (this). Il dispatch tramite
- * {@code server.send} \u00e8 veloce (spawn di thread o writeObject su
- * un buffer OS), quindi tenerlo dentro il synchronized non blocca
- * gli altri thread per tempi percettibili.
+ * Locking: everything under a single monitor (this). Dispatch through
+ * {@code server.send} is fast (executor submit or writeObject into
+ * an OS buffer), so keeping it inside the synchronized block doesn't
+ * block other threads for any noticeable time.
  */
 public class ServerController {
 
-    // === stato fisso ===
+    // === fixed state ===
 
     private final Server server;
     private final GameManager gameManager = new GameManager();
 
-    // === stato fase ===
+    // === phase state ===
 
     private PhaseLogic phase = new PhaseLogic.WaitingForNickname();
 
-    // === stato lobby ===
+    // === lobby state ===
 
     private String firstPlayerNickname;
     private int expectedPlayers;
     private final List<String> joinedNicknames = new ArrayList<>();
 
-    // === stato match ===
+    // === match state ===
 
     private Match match;
     private String currentPlayerNickname;
     private final Set<TotemColor> availableColors = EnumSet.allOf(TotemColor.class);
 
-    /** Mappa nickname -> Player. Popolata a partire da color picking. */
+    /** nickname -> Player. Populated from color picking onwards. */
     private final Map<String, Player> playerByNickname = new HashMap<>();
-    /** Mappa nickname -> colore scelto. */
+    /** nickname -> picked colour. */
     private final Map<String, TotemColor> colorByNickname = new HashMap<>();
 
-    /** Coda dei giocatori che devono ancora scegliere il colore. */
+    /** Queue of players still waiting to pick a colour. */
     private final Queue<String> colorPickQueue = new LinkedList<>();
 
-    /** Ordine per il piazzamento dei totem sull'offering track del round corrente. */
+    /** Order for placing totems on the offering track in the current round. */
     private List<Player> turnOrderForOfferingPick = new ArrayList<>();
     private int currentOfferingPickIndex;
 
-    /** Ordine per la risoluzione (pesca + acquisto) nel round corrente. */
+    /** Order for resolution (draw + buy) in the current round. */
     private List<Player> resolutionOrder = new ArrayList<>();
     private int currentResolutionIndex;
 
-    /** Budget della pesca corrente. */
+    /** Budget for the current draw. */
     private int currentUpperBudget;
     private int currentLowerBudget;
     private int currentUpperRemainingForBuilding;
     private int currentLowerRemainingForBuilding;
 
-    /** Proprietario dello special building (extra pick). */
+    /** Owner of the special building (extra pick). */
     private Player extraPickPlayer;
 
-    // === stato di pausa / fine ===
+    // === pause / end state ===
 
     private PhaseLogic phaseBeforePause;
     private Timer lonePlayerTimer;
@@ -117,7 +118,7 @@ public class ServerController {
     }
 
     // ====================================================================
-    // 1. API pubblica (chiamata da Rmi_Server e Socket_ClientHandler)
+    // 1. Public API (called by Rmi_Server and Socket_ClientHandler)
     // ====================================================================
 
     public synchronized void connect(String nick, VirtualView view) {
@@ -159,28 +160,28 @@ public class ServerController {
     }
 
     /**
-     * Chiamato dal Server (heartbeat o failure di un send) quando un
-     * client \u00e8 ritenuto disconnesso. Stesso effetto di un
-     * {@link #disconnect(String)} esplicito.
+     * Called by Server (from the heartbeat or after a send failure)
+     * when a client is considered disconnected. Same effect as an
+     * explicit {@link #disconnect(String)}.
      */
     public synchronized void handleDeliveryFailure(String nick) {
         phase.onDisconnect(this, nick);
     }
 
     // ====================================================================
-    // 2. Helper di dispatch (broadcast / single-target)
+    // 2. Dispatch helpers (broadcast / single-target)
     // ====================================================================
 
     /**
-     * SAM-shape interna usata dai metodi {@link #broadcast},
-     * {@link #broadcastExcept} e {@link #sendToNickname} per passare
-     * "quale metodo della view va chiamato" come argomento.
+     * Internal SAM-shape used by {@link #broadcast},
+     * {@link #broadcastExcept} and {@link #sendToNickname} to pass
+     * "which view method to call" as an argument.
      */
     interface ViewCall {
         void apply(VirtualView v) throws RemoteException;
     }
 
-    /** Manda una chiamata di view a tutti i client connessi. */
+    /** Sends a view call to every connected client. */
     private void broadcast(final ViewCall call) {
         Map<String, VirtualView> snapshot = server.snapshotViews();
         for (final Map.Entry<String, VirtualView> e : snapshot.entrySet()) {
@@ -188,7 +189,7 @@ public class ServerController {
         }
     }
 
-    /** Manda una chiamata di view a tutti i client TRANNE il sender. */
+    /** Sends a view call to every client EXCEPT the sender. */
     private void broadcastExcept(final String exceptNick, final ViewCall call) {
         Map<String, VirtualView> snapshot = server.snapshotViews();
         for (final Map.Entry<String, VirtualView> e : snapshot.entrySet()) {
@@ -199,7 +200,7 @@ public class ServerController {
         }
     }
 
-    /** Manda una chiamata di view a un singolo client per nickname. */
+    /** Sends a view call to a single client by nickname. */
     private void sendToNickname(final String nick, final ViewCall call) {
         VirtualView v = server.getView(nick);
         if (v == null) {
@@ -208,19 +209,19 @@ public class ServerController {
         sendTo(nick, v, call);
     }
 
-    // -- Versioni *AndCommit: dopo aver applicato la ViewCall, mandano
-    //    al client un v.onCommit() che chiude il bundle e fa scattare
-    //    {@code ClientController.commit()} (refresh + flush log + run
-    //    prompt). Usali come default per OGNI cosa che produce un
-    //    cambiamento visibile all'utente. Le versioni "nude"
-    //    {@code broadcast} / {@code sendToNickname} senza commit sono
-    //    riservate ai casi in cui un secondo send completer\u00e0 il
-    //    bundle con il proprio commit (es. {@link #rejectAction}).
+    // -- *AndCommit versions: after applying the ViewCall, they also
+    //    send a v.onCommit() to the client which closes the bundle
+    //    and triggers {@code ClientController.commit()} (refresh +
+    //    flush log + run prompt). Use these by default for EVERYTHING
+    //    that produces a user-visible change. The "bare"
+    //    {@code broadcast} / {@code sendToNickname} versions are
+    //    reserved for cases where a later send will close the bundle
+    //    with its own commit (e.g. {@link #rejectAction}).
 
     /**
-     * {@link #broadcast} + onCommit a tutti. Equivale a un bundle
-     * atomico: gli eventi della {@code call} arrivano in ordine sullo
-     * stesso thread del client, seguiti dal commit che fa il refresh.
+     * {@link #broadcast} + onCommit to everyone. Acts as an atomic
+     * bundle: the events in {@code call} arrive in order on the
+     * client's thread, followed by the commit that triggers refresh.
      */
     private void broadcastAndCommit(final ViewCall call) {
         broadcast(new ViewCall() {
@@ -231,7 +232,7 @@ public class ServerController {
         });
     }
 
-    /** {@link #broadcastExcept} + onCommit a tutti tranne il sender. */
+    /** {@link #broadcastExcept} + onCommit to everyone except the sender. */
     private void broadcastExceptAndCommit(final String exceptNick, final ViewCall call) {
         broadcastExcept(exceptNick, new ViewCall() {
             @Override public void apply(VirtualView v) throws RemoteException {
@@ -241,7 +242,7 @@ public class ServerController {
         });
     }
 
-    /** {@link #sendToNickname} + onCommit a un singolo client. */
+    /** {@link #sendToNickname} + onCommit to a single client. */
     private void sendToNicknameAndCommit(final String nick, final ViewCall call) {
         sendToNickname(nick, new ViewCall() {
             @Override public void apply(VirtualView v) throws RemoteException {
@@ -251,7 +252,7 @@ public class ServerController {
         });
     }
 
-    /** Dispatcher di basso livello: usa Server.send (thread RMI / inline socket). */
+    /** Low-level dispatcher: goes through Server.send (RMI executor / inline socket). */
     private void sendTo(final String nick, final VirtualView v, final ViewCall call) {
         server.send(nick, new Runnable() {
             @Override
@@ -259,7 +260,7 @@ public class ServerController {
                 try {
                     call.apply(v);
                 } catch (RemoteException ex) {
-                    // Il client \u00e8 morto: cascata di disconnect.
+                    // Client is dead: kick off the disconnect cascade.
                     handleDeliveryFailure(nick);
                 }
             }
@@ -267,27 +268,27 @@ public class ServerController {
     }
 
     // ====================================================================
-    // 3. Reject e snapshot (helper esposti a PhaseLogic)
+    // 3. Reject / snapshot helpers (exposed to PhaseLogic)
     // ====================================================================
 
     /**
-     * Manda al chiamante un {@code onActionRejected} con la ragione
-     * data, e SUBITO DOPO re-invia il {@code *Turn} corrente cos\u00ec
-     * il client non resta appeso senza prompt. La logica del re-invio
-     * \u00e8 polimorfica su {@link PhaseLogic}.
+     * Sends an {@code onActionRejected} to the caller with the given
+     * reason and RIGHT AFTER re-emits the current {@code *Turn} so
+     * the client doesn't sit there waiting forever with no prompt.
+     * The re-emit logic is polymorphic on {@link PhaseLogic}.
      *
-     * Usato per rifiutare AZIONI di gioco (es. pickColor su una fase
-     * sbagliata). Per rifiutare un tentativo di connect usa invece
-     * {@link #rejectNickname}.
+     * Used to refuse in-game ACTIONS (e.g. a pickColor in the wrong
+     * phase). To refuse a connect attempt use {@link #rejectNickname}
+     * instead.
      */
     void rejectAction(String nick, final String reason) {
-        // Il rejection \u00e8 mandato SENZA commit di proposito: subito
-        // dopo {@code phase.emitCurrentTurnTo} fa il send del *Turn
-        // corrente con il proprio commit (vedi sendXxxTurnTo). I due
-        // ViewCall arrivano in ordine al client (per socket sempre,
-        // per RMI con per-client executor), e l'unico commit del
-        // bundle fa renderizzare UNA sola schermata con stato +
-        // errore + prompt.
+        // The rejection is sent WITHOUT a commit on purpose: right
+        // after, {@code phase.emitCurrentTurnTo} sends the current
+        // *Turn with its own commit (see sendXxxTurnTo). The two
+        // ViewCalls arrive in order on the client (always on socket,
+        // and on RMI thanks to the per-client executor), and the
+        // single commit at the end of the bundle renders ONE single
+        // screen with state + error + prompt.
         sendToNickname(nick, new ViewCall() {
             @Override public void apply(VirtualView v) throws RemoteException {
                 v.onActionRejected(reason);
@@ -297,17 +298,16 @@ public class ServerController {
     }
 
     /**
-     * Manda al chiamante un {@code onNicknameRejected} con la ragione
-     * data. Triggera sul client il re-prompt del nickname, cos\u00ec
-     * l'utente pu\u00f2 ritentare (con stesso o nuovo nickname).
+     * Sends an {@code onNicknameRejected} to the caller with the
+     * given reason. Triggers a nickname re-prompt on the client so
+     * the user can try again (same or different nickname).
      */
     void rejectNickname(String nick, final String reason) {
-        // Caso terminale: il client chiuder\u00e0 la connessione.
-        // {@code ClientController.nicknameRejected} stampa l'errore
-        // direttamente (senza passare da commit) e fa countDown del
-        // latch di sessione. Niente commit qui per non invocare il
-        // refresh in uno stato (mini-state vuoto) che non aggiunge
-        // valore.
+        // Terminal case: the client will close the connection.
+        // {@code ClientController.nicknameRejected} prints the error
+        // directly (no commit) and counts down the session latch.
+        // No commit here either: we'd just refresh on an empty
+        // mini-state, which adds nothing.
         sendToNickname(nick, new ViewCall() {
             @Override public void apply(VirtualView v) throws RemoteException {
                 v.onNicknameRejected(reason);
@@ -315,7 +315,7 @@ public class ServerController {
         });
     }
 
-    /** Costruisce il GameSnapshot corrente per i join / reconnect. */
+    /** Builds the current GameSnapshot for joins / reconnects. */
     GameSnapshot buildSnapshot() {
         Map<String, TotemColor> colors = new LinkedHashMap<>(colorByNickname);
         Map<String, Integer> prestige = new LinkedHashMap<>();
@@ -355,13 +355,13 @@ public class ServerController {
     }
 
     // ====================================================================
-    // 4. ACCEPT methods (chiamati da PhaseLogic dopo aver passato il
-    //    dispatch per fase). Qui sta il grosso della game logic.
+    // 4. ACCEPT methods (called by PhaseLogic after the per-phase
+    //    dispatch). The bulk of the game logic lives here.
     // ====================================================================
 
     // --- lobby ----------------------------------------------------------
 
-    /** Accettato in {@link PhaseLogic.WaitingForNickname}: primo giocatore. */
+    /** Accepted in {@link PhaseLogic.WaitingForNickname}: first player. */
     void acceptFirstPlayerJoin(final String nick, VirtualView view) {
         String error = validateNicknameSyntax(nick);
         if (error != null) {
@@ -373,9 +373,9 @@ public class ServerController {
         currentPlayerNickname = nick;
         phase = new PhaseLogic.WaitingForPlayerCount();
 
-        // Niente snapshot al primo player (vedi GameSnapshot javadoc):
-        // basta dirgli "tocca a te scegliere il count". Il client
-        // aggiunge sa stesso ai joinedPlayers in awaitPlayerCount.
+        // No snapshot for the first player (see GameSnapshot javadoc):
+        // just tell them "your turn to set the count". The client
+        // adds itself to joinedPlayers inside awaitPlayerCount.
         broadcastAndCommit(new ViewCall() {
             @Override public void apply(VirtualView v) throws RemoteException {
                 v.onAwaitPlayerCount(nick);
@@ -383,7 +383,7 @@ public class ServerController {
         });
     }
 
-    /** Accettato in {@link PhaseLogic.WaitingForPlayerCount}. */
+    /** Accepted in {@link PhaseLogic.WaitingForPlayerCount}. */
     void acceptSetPlayerCount(final String nick, final int count) {
         if (!nick.equals(firstPlayerNickname)) {
             rejectAction(nick, "only the first player can set the count");
@@ -399,9 +399,9 @@ public class ServerController {
         }
         expectedPlayers = count;
         if (joinedNicknames.size() == count) {
-            // Bundle: count set + transizione a color picking nello
-            // stesso commit, cos\u00ec il client renderizza una sola
-            // volta con la fase nuova.
+            // Bundle: count set + transition to color picking in the
+            // same commit, so the client renders only once with the
+            // new phase.
             broadcast(new ViewCall() {
                 @Override public void apply(VirtualView v) throws RemoteException {
                     v.onPlayerCountSet(count);
@@ -412,7 +412,7 @@ public class ServerController {
             phase = new PhaseLogic.WaitingForPlayers();
             currentPlayerNickname = null;
             final int joined = joinedNicknames.size();
-            // Bundle: count set + await more players in un solo commit.
+            // Bundle: count set + await more players in a single commit.
             broadcastAndCommit(new ViewCall() {
                 @Override public void apply(VirtualView v) throws RemoteException {
                     v.onPlayerCountSet(count);
@@ -422,7 +422,7 @@ public class ServerController {
         }
     }
 
-    /** Accettato in {@link PhaseLogic.WaitingForPlayers}. */
+    /** Accepted in {@link PhaseLogic.WaitingForPlayers}. */
     void acceptAdditionalPlayerJoin(final String nick, VirtualView view) {
         String error = validateNicknameSyntax(nick);
         if (error != null) {
@@ -434,20 +434,20 @@ public class ServerController {
             return;
         }
         joinedNicknames.add(nick);
-        // Annuncio a tutti gli altri (il joiner non riceve onPlayerJoined
-        // di se stesso: lo apprende dallo snapshot pi\u00f9 sotto).
-        // Niente commit qui: se la lobby si completa subito dopo,
-        // {@code enterColorPicking} fa il broadcast onColorTurn con il
-        // suo commit, atomico per gli altri client.
+        // Announce to everyone else (the joiner doesn't get its own
+        // onPlayerJoined: it learns about itself from the snapshot
+        // below). No commit here: if the lobby fills up right after,
+        // {@code enterColorPicking} broadcasts onColorTurn with its
+        // own commit, which is atomic for the other clients.
         broadcastExcept(nick, new ViewCall() {
             @Override public void apply(VirtualView v) throws RemoteException {
                 v.onPlayerJoined(nick);
             }
         });
         if (joinedNicknames.size() == expectedPlayers) {
-            // Lobby piena: facciamo PRIMA la transizione a COLOR_PICKING
-            // (broadcast onColorTurn + commit a tutti), poi mandiamo
-            // al joiner il suo snapshot personale (con commit dedicato).
+            // Lobby full: FIRST transition to COLOR_PICKING (broadcast
+            // onColorTurn + commit to everyone), THEN send the joiner
+            // their own snapshot (with its own dedicated commit).
             enterColorPicking();
             final GameSnapshot snapAfter = buildSnapshot();
             sendToNicknameAndCommit(nick, new ViewCall() {
@@ -456,9 +456,9 @@ public class ServerController {
                 }
             });
         } else {
-            // Lobby ancora incompleta: lo snapshot WAITING_FOR_PLAYERS
-            // \u00e8 corretto. Bundle: snap + count notification a chi
-            // \u00e8 gi\u00e0 dentro nello stesso commit cycle.
+            // Lobby still incomplete: the WAITING_FOR_PLAYERS snapshot
+            // is correct. Bundle: snap + count notification to whoever
+            // is already in, in the same commit cycle.
             final GameSnapshot snap = buildSnapshot();
             sendToNicknameAndCommit(nick, new ViewCall() {
                 @Override public void apply(VirtualView v) throws RemoteException {
@@ -491,7 +491,7 @@ public class ServerController {
 
     // --- color picking --------------------------------------------------
 
-    /** Accettato in {@link PhaseLogic.ColorPicking}. */
+    /** Accepted in {@link PhaseLogic.ColorPicking}. */
     void acceptColorPick(final String nick, final TotemColor color) {
         String expected = colorPickQueue.peek();
         if (expected == null) {
@@ -512,9 +512,10 @@ public class ServerController {
         colorPickQueue.poll();
 
         if (colorPickQueue.isEmpty()) {
-            // Bundle: colorPicked nudo (no commit) + l'intera startMatch
-            // sequence che chiude con i suoi commit. Cos\u00ec il primo
-            // commit visibile arriva con phase gi\u00e0 in match.
+            // Bundle: bare colorPicked (no commit) + the full
+            // startMatch sequence that ends with its own commits.
+            // This way the first visible commit shows up with the
+            // phase already in the match.
             broadcast(new ViewCall() {
                 @Override public void apply(VirtualView v) throws RemoteException {
                     v.onColorPicked(nick, color);
@@ -525,9 +526,9 @@ public class ServerController {
             currentPlayerNickname = colorPickQueue.peek();
             final String next = currentPlayerNickname;
             final Set<TotemColor> avail = new HashSet<>(availableColors);
-            // Bundle: colorPicked + colorTurn(next) in un solo commit:
-            // l'utente vede una sola schermata con il colore appena
-            // scelto e il prossimo color picker.
+            // Bundle: colorPicked + colorTurn(next) in a single
+            // commit: the user sees one single screen with the colour
+            // that was just picked and the next color picker.
             broadcastAndCommit(new ViewCall() {
                 @Override public void apply(VirtualView v) throws RemoteException {
                     v.onColorPicked(nick, color);
@@ -549,7 +550,7 @@ public class ServerController {
             this.turnOrderForOfferingPick = m.getBoard().getPlayersTurnOrder(m.getPlayersList());
             this.currentOfferingPickIndex = 0;
         } catch (DeckLoadException | EmptyDeckException e) {
-            // Setup fallito: reset alla lobby con errore.
+            // Setup failed: reset to lobby with an error.
             final String reason = "match setup failed: " + e.getMessage();
             broadcastAndCommit(new ViewCall() {
                 @Override public void apply(VirtualView v) throws RemoteException {
@@ -565,11 +566,11 @@ public class ServerController {
         }
         final Era era = match.getCurrentEra();
         final int round = match.getCurrentRound();
-        // Bundle "match start": matchStarted + prestige/food iniziali
-        // di ogni giocatore + roundStarted, tutto in UN solo commit.
-        // Cos\u00ec il primo dump dopo color-picking arriva con tutto
-        // gi\u00e0 popolato (no "PP: ?" / "Food: ?"), e tutti i log
-        // lobby + match-start sono in un'unica schermata.
+        // "match start" bundle: matchStarted + each player's initial
+        // prestige/food + roundStarted, all in ONE commit. That way
+        // the first dump after color picking shows up fully populated
+        // (no "PP: ?" / "Food: ?") and all the lobby + match-start
+        // logs are on one screen.
         broadcastAndCommit(new ViewCall() {
             @Override public void apply(VirtualView v) throws RemoteException {
                 v.onMatchStarted(order, era);
@@ -586,7 +587,7 @@ public class ServerController {
 
     // --- offering tile --------------------------------------------------
 
-    /** Accettato in {@link PhaseLogic.PickOfferingTile}. */
+    /** Accepted in {@link PhaseLogic.PickOfferingTile}. */
     void acceptOfferingTilePick(final String nick, final int tileIndex) {
         Player player = playerByNickname.get(nick);
         if (player == null) {
@@ -621,17 +622,17 @@ public class ServerController {
             rejectAction(nick, "internal error: moveTotem failed");
             return;
         }
-        // Bundle "pick fatto": board aggiornata + onOfferingTilePicked,
-        // SENZA commit ancora. Il commit arriva con il prossimo bundle
-        // (advanceOfferingPickerUntilConnected manda il *Turn al picker
-        // successivo, oppure entra in resolution): cos\u00ec il client
-        // vede UNA schermata sola con la track aggiornata, il log "X
-        // placed totem", e lo stato del nuovo picker.
+        // "pick done" bundle: updated board + onOfferingTilePicked,
+        // still NO commit. The commit comes with the next bundle
+        // (advanceOfferingPickerUntilConnected sends the *Turn to
+        // the next picker, or enters resolution): so the client sees
+        // ONE single screen with the updated track, the "X placed
+        // totem" log, and the new picker state.
         //
-        // Nota: rimane comunque safe se il next bundle dovesse mancare,
-        // perch\u00e9 advanceOfferingPickerUntilConnected emette sempre
-        // o un *Turn(...AndCommit) o entra in
-        // enterCharacterPickForFirstResolutionPlayer (che committa).
+        // Note: still safe if for some reason the next bundle is
+        // missing, because advanceOfferingPickerUntilConnected
+        // always either emits a *Turn(...AndCommit) or enters
+        // enterCharacterPickForFirstResolutionPlayer (which commits).
         final Board board = match.getBoard();
         broadcast(new ViewCall() {
             @Override public void apply(VirtualView v) throws RemoteException {
@@ -662,7 +663,7 @@ public class ServerController {
             }
             currentOfferingPickIndex++;
         }
-        // Nessun altro picker: passa alla resolution.
+        // No more pickers left: move on to resolution.
         enterCharacterPickForFirstResolutionPlayer();
     }
 
@@ -718,7 +719,7 @@ public class ServerController {
         });
     }
 
-    /** Accettato in {@link PhaseLogic.TurnPickCardsCharacter}. */
+    /** Accepted in {@link PhaseLogic.TurnPickCardsCharacter}. */
     void acceptCharacterCardsPick(final String nick, List<Integer> upperIds, List<Integer> lowerIds) {
         Player player = playerByNickname.get(nick);
         if (player == null) {
@@ -786,7 +787,7 @@ public class ServerController {
         });
     }
 
-    /** Accettato in {@link PhaseLogic.TurnPickCardsBuilding}. */
+    /** Accepted in {@link PhaseLogic.TurnPickCardsBuilding}. */
     void acceptBuildingCardsPick(final String nick, List<Integer> upperIds, List<Integer> lowerIds) {
         Player player = playerByNickname.get(nick);
         if (player == null) {
@@ -851,11 +852,11 @@ public class ServerController {
         final List<BuildingCard> finalLower = foundLower;
         final Board boardAfterBuild = match.getBoard();
         final int newFood = player.getFood();
-        // SENZA commit: il prossimo step (advanceResolver -> next
-        // character pick turn, oppure afterAllResolutionsDone -> extra
-        // pick / round end) chiude con il proprio commit. Cos\u00ec si
-        // vede UNA sola schermata con buildings comprate + nuovo
-        // turno.
+        // NO commit: the next step (advanceResolver -> next
+        // character pick turn, or afterAllResolutionsDone -> extra
+        // pick / round end) closes the bundle with its own commit.
+        // This way we get ONE single screen showing the bought
+        // buildings + the new turn.
         broadcast(new ViewCall() {
             @Override public void apply(VirtualView v) throws RemoteException {
                 v.onBoardSnapshot(boardAfterBuild);
@@ -868,21 +869,20 @@ public class ServerController {
     }
 
     private void afterAllResolutionsDone() {
-        // Housekeeping di fine giro:
-        //   clear turn order tile, sposta offering->turn-order tile,
-        //   append giocatori mancanti, applica bonus delle slot,
-        //   trova il proprietario dell'edificio speciale.
+        // End-of-round housekeeping:
+        //   clear turn order tile, move offering->turn-order tile,
+        //   append missing players, apply slot bonuses, find the
+        //   special building's owner.
         for (Player p : match.getPlayersList()) {
             match.getBoard().getTurnOrderTile().clearSlot(p);
         }
         match.getBoard().moveOfferingTrackToTurnOrder(match.getPlayersList());
         appendMissingPlayersToTurnOrderTile();
         match.resolveTurnOrderTile();
-        // Bundle "bonus tile applied": tutti i prestige/food
-        // aggiornati per ogni giocatore in UN solo ViewCall, SENZA
-        // commit. Il commit arriva o dal prossimo extra-pick turn
-        // qui sotto, o (se non c'\u00e8 extra-pick) dalla fase
-        // enterResolveBuildingsAndEvents.
+        // "bonus tile applied" bundle: every player's updated
+        // prestige/food in ONE ViewCall, NO commit. The commit will
+        // come either from the next extra-pick turn below, or (if
+        // there's no extra-pick) from enterResolveBuildingsAndEvents.
         broadcast(new ViewCall() {
             @Override public void apply(VirtualView v) throws RemoteException {
                 for (Player p : match.getPlayersList()) {
@@ -941,7 +941,7 @@ public class ServerController {
         return null;
     }
 
-    /** Accettato in {@link PhaseLogic.ResetTurnOrderAndPickExtraBuilding}. */
+    /** Accepted in {@link PhaseLogic.ResetTurnOrderAndPickExtraBuilding}. */
     void acceptExtraCardPick(final String nick, final Integer cardId, final boolean isCharacter) {
         Player player = playerByNickname.get(nick);
         if (player == null || player != extraPickPlayer) {
@@ -949,8 +949,8 @@ public class ServerController {
             return;
         }
         if (cardId == null) {
-            // Skip: niente commit qui, il successivo
-            // enterResolveBuildingsAndEvents chiude il bundle.
+            // Skip: no commit here, the next
+            // enterResolveBuildingsAndEvents closes the bundle.
             broadcast(new ViewCall() {
                 @Override public void apply(VirtualView v) throws RemoteException {
                     v.onExtraCardPicked(nick, null, isCharacter);
@@ -991,9 +991,9 @@ public class ServerController {
             newFoodHolder[0] = player.getFood();
         }
         final Board boardAfterExtra = match.getBoard();
-        // Bundle "extra pick result": board + (food changed se
-        // building) + onExtraCardPicked, SENZA commit; il successivo
-        // enterResolveBuildingsAndEvents chiude.
+        // "extra pick result" bundle: board + (food changed if
+        // building) + onExtraCardPicked, NO commit; the following
+        // enterResolveBuildingsAndEvents closes it.
         broadcast(new ViewCall() {
             @Override public void apply(VirtualView v) throws RemoteException {
                 v.onBoardSnapshot(boardAfterExtra);
@@ -1013,11 +1013,11 @@ public class ServerController {
 
         match.resolveBuildings();
         match.resolveEvents();
-        // Bundle "fine round + scoring": tutti i prestige/food
-        // aggiornati + onRoundEnded + (eventuale era change) +
-        // onRoundStarted, in UN solo broadcast SENZA commit.
-        // Il commit lo aggiunge advanceOfferingPickerUntilConnected
-        // (col primo *Turn del round successivo) o endGame.
+        // "end of round + scoring" bundle: all updated prestige/food
+        // + onRoundEnded + (era change if any) + onRoundStarted, in
+        // ONE broadcast with NO commit. The commit is added by
+        // advanceOfferingPickerUntilConnected (with the first *Turn
+        // of the next round) or by endGame.
         broadcast(new ViewCall() {
             @Override public void apply(VirtualView v) throws RemoteException {
                 for (Player p : match.getPlayersList()) {
@@ -1058,6 +1058,7 @@ public class ServerController {
     }
 
     // --- end of match ---------------------------------------------------
+
 
     private void endGame() {
         if (match != null) {
@@ -1106,11 +1107,11 @@ public class ServerController {
     // 5. Disconnect + reconnect
     // ====================================================================
 
-    /** Accettato in qualsiasi fase (gestisce la cascata). */
+    /** Accepted in any phase (handles the cascade). */
     void acceptDisconnect(final String nick) {
-        // Idempotenza: se il client \u00e8 gi\u00e0 stato rimosso da un altro
-        // thread (es. due send paralleli falliti verso lo stesso client),
-        // non ripetere la cascata di broadcast.
+        // Idempotency: if the client was already removed by another
+        // thread (e.g. two parallel sends to the same client both
+        // failed), don't run the broadcast cascade twice.
         if (!server.unregisterIfPresent(nick)) {
             return;
         }
@@ -1129,16 +1130,15 @@ public class ServerController {
             wasJoined = joinedNicknames.contains(nick);
         }
 
-        // Se il client non era ufficialmente in lobby/match (es. era
-        // stato rifiutato al connect), non c'\u00e8 nessuno da
-        // informare della sua disconnessione.
+        // If the client was never officially in the lobby/match
+        // (e.g. it was rejected at connect), there's nobody to tell
+        // about the disconnect.
         if (!wasJoined) {
             return;
         }
 
-        // Bundle "disconnect + eventuale pause": un solo commit
-        // qualunque sia il caso. Cos\u00ec il client vede una sola
-        // schermata.
+        // "disconnect + maybe pause" bundle: one commit in either
+        // case. The client sees a single screen.
         if (match != null && !phase.isFinished()) {
             int connected = countConnectedInMatch();
             if (connected <= 1) {
@@ -1154,9 +1154,9 @@ public class ServerController {
                 });
                 return;
             }
-            // 2+: annuncio + skip turno se era il suo. L'advanceCurrent
-            // emetter\u00e0 il *Turn (e quindi il commit) per il prossimo
-            // giocatore. Niente commit qui.
+            // 2+: announce + skip the turn if it was theirs.
+            // advanceCurrent will emit the *Turn (and therefore the
+            // commit) for the next player. No commit here.
             broadcast(new ViewCall() {
                 @Override public void apply(VirtualView v) throws RemoteException {
                     v.onPlayerDisconnected(nick);
@@ -1165,15 +1165,15 @@ public class ServerController {
             if (nick.equals(currentPlayerNickname)) {
                 phase.advanceCurrent(this);
             } else {
-                // Non era il suo turno: serve comunque un commit per
-                // far renderizzare l'annuncio.
+                // Wasn't their turn: still need a commit so the
+                // announcement actually renders.
                 broadcastAndCommit(new ViewCall() {
                     @Override public void apply(VirtualView v) throws RemoteException { }
                 });
             }
             return;
         }
-        // Niente match attivo (es. lobby): annuncio standalone con commit.
+        // No active match (e.g. lobby): standalone announcement with commit.
         broadcastAndCommit(new ViewCall() {
             @Override public void apply(VirtualView v) throws RemoteException {
                 v.onPlayerDisconnected(nick);
@@ -1181,27 +1181,27 @@ public class ServerController {
         });
     }
 
-    /** Accettato in {@link PhaseLogic.PausedWaitingReconnect}. */
+    /** Accepted in {@link PhaseLogic.PausedWaitingReconnect}. */
     void acceptReconnect(final String nick, VirtualView view) {
-        // Riconnessione: il nickname deve essere noto.
+        // Reconnect: the nickname has to be a known one.
         if (!joinedNicknames.contains(nick)) {
             rejectAction(nick, "match in progress; cannot join now");
             return;
         }
-        // Spedisce lo snapshot al riconnesso (bundle: snap + commit).
+        // Push the snapshot to the reconnected client (bundle: snap + commit).
         final GameSnapshot snap = buildSnapshot();
         sendToNicknameAndCommit(nick, new ViewCall() {
             @Override public void apply(VirtualView v) throws RemoteException {
                 v.onGameSnapshot(snap);
             }
         });
-        // Annuncia agli altri (con commit).
+        // Announce to the others (with commit).
         broadcastExceptAndCommit(nick, new ViewCall() {
             @Override public void apply(VirtualView v) throws RemoteException {
                 v.onPlayerReconnected(nick);
             }
         });
-        // Se ora ci sono 2+ connessi, esci dalla pausa.
+        // If there are 2+ connected now, leave the pause.
         int connected = countConnectedInMatch();
         if (connected >= 2) {
             resumeFromPause();
@@ -1210,9 +1210,9 @@ public class ServerController {
                     v.onMatchResumed();
                 }
             });
-            // Re-invia il *Turn al giocatore di turno corrente; ogni
-            // sendXxxTurnTo \u00e8 stata aggiornata per usare il
-            // sendToNicknameAndCommit, quindi commit incluso.
+            // Re-send the current *Turn to whoever's turn it is;
+            // every sendXxxTurnTo has been updated to use
+            // sendToNicknameAndCommit, so the commit is included.
             if (currentPlayerNickname != null) {
                 phase.emitCurrentTurnTo(this, currentPlayerNickname);
             }
@@ -1246,34 +1246,34 @@ public class ServerController {
         PhaseLogic restored = phaseBeforePause;
         phaseBeforePause = null;
         phase = restored;
-        // Se il currentPlayerNickname \u00e8 ancora disconnesso, salta.
+        // If currentPlayerNickname is still disconnected, skip.
         if (currentPlayerNickname != null && !server.isConnected(currentPlayerNickname)) {
             phase.advanceCurrent(this);
         }
     }
 
-    /** Chiamato da {@link PhaseLogic.PickOfferingTile#advanceCurrent}. */
+    /** Called by {@link PhaseLogic.PickOfferingTile#advanceCurrent}. */
     void advanceOfferingPicker() {
         currentOfferingPickIndex++;
         advanceOfferingPickerUntilConnected();
     }
 
-    /** Chiamato da {@link PhaseLogic.TurnPickCardsCharacter#advanceCurrent}
-     *  e {@link PhaseLogic.TurnPickCardsBuilding#advanceCurrent}. */
+    /** Called by {@link PhaseLogic.TurnPickCardsCharacter#advanceCurrent}
+     *  and {@link PhaseLogic.TurnPickCardsBuilding#advanceCurrent}. */
     void advanceResolver() {
         currentResolutionIndex++;
         advanceResolverUntilConnectedAndContinue();
     }
 
-    /** Chiamato da {@link PhaseLogic.ResetTurnOrderAndPickExtraBuilding#advanceCurrent}. */
+    /** Called by {@link PhaseLogic.ResetTurnOrderAndPickExtraBuilding#advanceCurrent}. */
     void skipExtraPick() {
         extraPickPlayer = null;
         enterResolveBuildingsAndEvents();
     }
 
-    // === re-invio del *Turn corrente (per rejection / reconnect) =========
+    // === re-send the current *Turn (for rejection / reconnect) =========
 
-    /** Re-invia a {@code nick} l'evento {@code onColorTurn} corrente. */
+    /** Re-sends the current {@code onColorTurn} to {@code nick}. */
     void sendColorTurnTo(String nick) {
         final String current = currentPlayerNickname;
         final Set<TotemColor> avail = new HashSet<>(availableColors);
@@ -1285,7 +1285,7 @@ public class ServerController {
         });
     }
 
-    /** Re-invia a {@code nick} l'evento {@code onOfferingTileTurn} corrente. */
+    /** Re-sends the current {@code onOfferingTileTurn} to {@code nick}. */
     void sendOfferingTileTurnTo(String nick) {
         if (currentPlayerNickname == null || match == null) return;
         final String current = currentPlayerNickname;
@@ -1299,7 +1299,7 @@ public class ServerController {
         });
     }
 
-    /** Re-invia a {@code nick} l'evento {@code onCharacterPickTurn} corrente. */
+    /** Re-sends the current {@code onCharacterPickTurn} to {@code nick}. */
     void sendCharacterPickTurnTo(String nick) {
         if (currentPlayerNickname == null) return;
         final String current = currentPlayerNickname;
@@ -1314,7 +1314,7 @@ public class ServerController {
         });
     }
 
-    /** Re-invia a {@code nick} l'evento {@code onBuildingPickTurn} corrente. */
+    /** Re-sends the current {@code onBuildingPickTurn} to {@code nick}. */
     void sendBuildingPickTurnTo(String nick) {
         if (currentPlayerNickname == null) return;
         final String current = currentPlayerNickname;
@@ -1329,7 +1329,7 @@ public class ServerController {
         });
     }
 
-    /** Re-invia a {@code nick} l'evento {@code onExtraPickTurn} corrente. */
+    /** Re-sends the current {@code onExtraPickTurn} to {@code nick}. */
     void sendExtraPickTurnTo(String nick) {
         if (currentPlayerNickname == null) return;
         final String current = currentPlayerNickname;
@@ -1404,7 +1404,7 @@ public class ServerController {
     }
 
     // ====================================================================
-    // 6. Reset alla lobby e utility statiche
+    // 6. Reset-to-lobby and static utilities
     // ====================================================================
 
     private void resetToLobby() {
