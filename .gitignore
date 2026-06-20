@@ -107,3 +107,10 @@ GAME_FLOW.md
 .gitignore
 NETWORK_VIEW_ARCHITECTURE.md
 CLIENT_SERVER_GUIDE.md
+
+# --- CUSTOM RULES FOR GUI AND COPYRIGHTED ASSETS ---
+# Ignore original game PDFs
+*.pdf
+
+# Ignore extracted images folder for JavaFX
+src/main/resources/images/

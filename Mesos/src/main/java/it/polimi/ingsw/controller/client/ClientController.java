@@ -19,25 +19,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.CancellationException;
 
 /**
- * Client-side controller. Keeps a local mini-state that mirrors what
- * the server told us, updated event by event.
- *
- * Threading model (kept simple):
- *   - every public method is synchronized
- *   - event methods (called from the RMI / Socket network thread)
- *     mutate the state and trigger view.refresh()
- *   - the *Turn methods, when it's our turn, BLOCK on view.promptXxx()
- *     and then push the action through virtualServer
- *   - the outgoing network call (virtualServer.xxx()) happens inside
- *     the synchronized method: the lock is held, but the call is
- *     fast both on RMI (microseconds for the dispatch) and on socket
- *     (writeObject into the OS buffer)
- *
- * "Block" on the prompt means that, while the user is thinking,
- * incoming events from the server just queue up in the socket buffer
- * / RMI thread pool. They get processed as soon as the user picks.
+ * The {@code ClientController} receives updates from the server, updates its local,
+ * simplified model of the game state, and notifies the {@link View} to prompt the user
+ * or display information when needed.
  */
 public class ClientController {
 
@@ -45,8 +32,7 @@ public class ClientController {
     private String myNickname;
     private VirtualServer virtualServer;
 
-    // === local mini-state ===
-
+    // === Local mini-state ===
     private Phase currentPhase;
     private String currentPlayer;
     private final List<String> joinedPlayers = new ArrayList<>();
@@ -66,145 +52,131 @@ public class ClientController {
     private int expectedPlayers;
     private List<String> finalLeaderboard;
     private List<String> finalWinners;
-    /**
-     * Server-side error (e.g. "tile already occupied") waiting to be
-     * shown. We just stash it in {@link #actionRejected} without
-     * printing it right away: the next {@link #commit()} flushes it
-     * AFTER the state dump and right before the prompt.
-     */
+
     private String pendingError;
-
-    /**
-     * Game log lines accumulated by the event handlers (e.g.
-     * "A picked RED", "B prestige -> 5", "Round 1 started"). They
-     * get dumped in one batch by {@link #commit()} after the state
-     * refresh, so the user first sees the up-to-date dump and then
-     * the history of what happened.
-     */
     private final List<String> pendingLogs = new ArrayList<>();
-
-    /**
-     * Prompt to run on the next {@link #commit()}, after refresh and
-     * logs. Set by the {@code *Turn} handlers when it's our turn.
-     * It just sits here until commit fires it: this way the block on
-     * stdin happens AFTER we've finished rendering the state (and
-     * not in the middle of a bundle).
-     */
     private Runnable pendingPrompt;
-
-    /**
-     * Flag telling the next {@link #commit()} to also fire
-     * {@link #endLatch} (game over). Set inside {@link #gameEnded}.
-     * That way the main thread keeps blocking in
-     * {@code awaitGameEnd} until the final dump has actually been
-     * shown.
-     */
     private boolean pendingGameEnded;
-
-    /**
-     * Set by {@link #nicknameRejected} so the network client (Rmi_Client
-     * / Socket_Client) knows to skip the trailing {@code disconnect()}
-     * call after the latch fires. Without this, a rejected duplicate
-     * would still ship {@code disconnect(nick)} which on the server
-     * would kick the legitimate holder of that nickname out of the
-     * lobby/match.
-     */
     private boolean connectionRejected;
-
-    /**
-     * Callback installed by the network client (Rmi_Client /
-     * Socket_Client) that re-sends a {@code connect} to the server
-     * using the controller's current {@link #myNickname}. Used by
-     * {@link #nicknameRejected(String)} when the rejection is
-     * retryable (duplicate nickname, bad syntax) to re-prompt the
-     * user instead of closing the session.
-     */
     private Runnable retryConnect;
-
-    /**
-     * One-shot latch the client's main thread (Rmi_Client.run /
-     * Socket_Client.run) uses to park itself until the
-     * {@code onGameEnded} event arrives. The network thread calls
-     * {@code countDown()} inside {@code gameEnded(...)} which wakes
-     * the main thread up. See {@link #awaitGameEnd()}.
-     */
     private final CountDownLatch endLatch = new CountDownLatch(1);
 
+    /**
+     * Constructs a new ClientController.
+     *
+     * @param view The view implementation (CLI or GUI) attached to this client.
+     */
     public ClientController(View view) {
         this.view = view;
     }
 
-    /** Called by the adapter (Rmi_Client / Socket_Client) after the nickname prompt. */
+    /**
+     * Sets the nickname of the current player.
+     *
+     * @param nick The chosen nickname.
+     */
     public synchronized void setNickname(String nick) {
         this.myNickname = nick;
     }
 
+    /**
+     * Retrieves the nickname of the current player.
+     *
+     * @return The current player's nickname.
+     */
     public synchronized String getMyNickname() {
         return myNickname;
     }
 
-    /** Used by the adapter to hand the controller a reference to the server. */
+    /**
+     * Sets the remote virtual server reference to allow outward communication.
+     *
+     * @param vs The virtual server stub.
+     */
     public synchronized void setVirtualServer(VirtualServer vs) {
         this.virtualServer = vs;
     }
 
     /**
-     * Install the "re-send connect" callback used by
-     * {@link #nicknameRejected(String)} to retry with a fresh
-     * nickname after a recoverable rejection.
+     * Sets the retry connection hook to allow reconnecting under a different nickname.
+     *
+     * @param r The runnable logic to retry connection.
      */
     public synchronized void setRetryConnect(Runnable r) {
         this.retryConnect = r;
     }
 
-    /** Initial nickname prompt; called by the adapter. */
+    /**
+     * Prompts the user for a nickname using the underlying View.
+     * Called automatically by the network adapter upon connection start.
+     *
+     * @return The chosen nickname string.
+     */
     public String promptNickname() {
-        return view.promptNickname();
+        String nick = view.promptNickname();
+        // Immediately save the nickname locally to avoid Race Conditions with RMI callbacks!
+        if (nick != null) {
+            setNickname(nick);
+        }
+        return nick;
     }
 
     /**
-     * Blocks the caller until the {@code onGameEnded} event arrives.
-     * Used by {@code Rmi_Client.run()} and {@code Socket_Client.run()}
-     * to keep the main thread alive during the match without polling.
-     * The network thread calls {@code endLatch.countDown()} inside
-     * {@link #gameEnded} when the match is over.
+     * Blocks the current thread until the game has officially ended or the connection drops.
+     *
+     * @throws InterruptedException If the thread is interrupted while waiting.
      */
     public void awaitGameEnd() throws InterruptedException {
         endLatch.await();
     }
 
-    // === getters for the view (used by refresh) ===
+    // === Getters for the View (used during refresh) ===
 
+    /** @return The current phase of the match. */
     public synchronized Phase getCurrentPhase()                       { return currentPhase; }
+    /** @return The nickname of the player whose turn is currently active. */
     public synchronized String getCurrentPlayer()                     { return currentPlayer; }
+    /** @return A copy of the list of currently joined players. */
     public synchronized List<String> getJoinedPlayers()               { return new ArrayList<>(joinedPlayers); }
+    /** @return A copy of the color assignments for each player. */
     public synchronized Map<String, TotemColor> getColorsByPlayer()   { return new LinkedHashMap<>(colorsByPlayer); }
+    /** @return A copy of the prestige points mapped by player nickname. */
     public synchronized Map<String, Integer> getPrestige()            { return new HashMap<>(prestige); }
+    /** @return A copy of the food tokens mapped by player nickname. */
     public synchronized Map<String, Integer> getFood()                { return new HashMap<>(food); }
+    /** @return A copy of the character cards owned by each player. */
     public synchronized Map<String, List<CharacterCard>> getHandsByPlayer()   { return new LinkedHashMap<>(handsByPlayer); }
+    /** @return A copy of the building cards constructed by each player. */
     public synchronized Map<String, List<BuildingCard>> getBuildingsByPlayer() { return new LinkedHashMap<>(buildingsByPlayer); }
+    /** @return A set containing the currently unassigned totem colors. */
     public synchronized Set<TotemColor> getAvailableColors()          { return new HashSet<>(availableColors); }
+    /** @return The upper row budget for the active player. */
     public synchronized int getCurrentUpperBudget()                   { return currentUpperBudget; }
+    /** @return The lower row budget for the active player. */
     public synchronized int getCurrentLowerBudget()                   { return currentLowerBudget; }
+    /** @return The remaining upper row picks for the active player. */
     public synchronized int getCurrentUpperRemaining()                { return currentUpperRemaining; }
+    /** @return The remaining lower row picks for the active player. */
     public synchronized int getCurrentLowerRemaining()                { return currentLowerRemaining; }
+    /** @return The current round number. */
     public synchronized int getCurrentRound()                         { return currentRound; }
+    /** @return The current era (Age). */
     public synchronized Era getCurrentEra()                           { return currentEra; }
+    /** @return The most recent snapshot of the game board. */
     public synchronized Board getCurrentBoard()                       { return currentBoard; }
+    /** @return The total expected player count set by the first player. */
     public synchronized int getExpectedPlayers()                      { return expectedPlayers; }
+    /** @return A copy of the final leaderboard, or null if the game hasn't ended. */
     public synchronized List<String> getFinalLeaderboard()            { return finalLeaderboard == null ? null : new ArrayList<>(finalLeaderboard); }
+    /** @return A copy of the final winners list, or null if the game hasn't ended. */
     public synchronized List<String> getFinalWinners()                { return finalWinners == null ? null : new ArrayList<>(finalWinners); }
 
-    // ====================================================================
-    // Event handlers (called by Rmi_Client / Socket_Client).
-    //
-    // SIMPLE RULE: every handler only updates the local mini-state and
-    // queues any log/prompt. NO handler calls view.refresh /
-    // view.displayInfo / view.promptXxx directly. The only render
-    // path is {@link #commit()}, triggered by the server at the end
-    // of a bundle via {@code v.onCommit()}.
-    // ====================================================================
 
+    /**
+     * Handles a notification that a new player has joined the lobby.
+     *
+     * @param nick The nickname of the new player.
+     */
     public synchronized void playerJoined(String nick) {
         if (!joinedPlayers.contains(nick)) {
             joinedPlayers.add(nick);
@@ -212,25 +184,40 @@ public class ClientController {
         pendingLogs.add(nick + " joined the lobby");
     }
 
+    /**
+     * Prompts the first player to provide the total number of players for the match.
+     *
+     * @param firstPlayerNick The nickname of the first player to join.
+     */
     public synchronized void awaitPlayerCount(String firstPlayerNick) {
+        this.currentPhase = Phase.WAITING_FOR_PLAYER_COUNT;
         this.currentPlayer = firstPlayerNick;
-        // The first player doesn't get an initial snapshot (see
-        // ServerController.acceptFirstPlayerJoin); without a snapshot
-        // they wouldn't know they're in the lobby. So add them
-        // manually here.
+
         if (!joinedPlayers.contains(firstPlayerNick)) {
             joinedPlayers.add(firstPlayerNick);
         }
+
         if (firstPlayerNick.equals(myNickname)) {
             pendingLogs.add("You are the first player. Pick the number of participants.");
             pendingPrompt = new Runnable() {
                 @Override public void run() {
-                    final int count = view.promptPlayerCount();
-                    sendOrError(new SafeSend() {
-                        @Override public void send() throws RemoteException {
-                            virtualServer.setPlayerCount(myNickname, count);
-                        }
-                    });
+                    try {
+                        final int count = view.promptPlayerCount();
+                        sendOrError(new SafeSend() {
+                            @Override public void send() throws RemoteException {
+                                virtualServer.setPlayerCount(myNickname, count);
+                            }
+                        });
+                    } catch (CancellationException e) {
+                        System.out.println("LOG: Player canceled game creation. Disconnecting...");
+                        sendOrError(new SafeSend() {
+                            @Override public void send() throws RemoteException {
+                                virtualServer.disconnect(myNickname);
+                            }
+                        });
+                        connectionRejected = true;
+                        endLatch.countDown();
+                    }
                 }
             };
         } else {
@@ -238,15 +225,33 @@ public class ClientController {
         }
     }
 
+    /**
+     * Notifies the client that the player count has been officially set.
+     *
+     * @param count The expected player count.
+     */
     public synchronized void playerCountSet(int count) {
         this.expectedPlayers = count;
         pendingLogs.add("Player count set to " + count);
     }
 
+    /**
+     * Sets the state to waiting for remaining players to join the lobby.
+     *
+     * @param joined The number of currently connected players.
+     * @param total The total expected number of players.
+     */
     public synchronized void awaitMorePlayers(int joined, int total) {
+        this.currentPhase = Phase.WAITING_FOR_PLAYERS;
         pendingLogs.add("Waiting for more players (" + joined + "/" + total + ")");
     }
 
+    /**
+     * Prompts the active player to choose their Totem color.
+     *
+     * @param nick The nickname of the active player.
+     * @param available The set of colors currently available for selection.
+     */
     public synchronized void colorTurn(String nick, Set<TotemColor> available) {
         this.currentPhase = Phase.COLOR_PICKING;
         this.currentPlayer = nick;
@@ -268,27 +273,55 @@ public class ClientController {
         }
     }
 
+    /**
+     * Notifies the client that a specific color was chosen by a player.
+     *
+     * @param nick The player who picked the color.
+     * @param color The chosen color.
+     */
     public synchronized void colorPicked(String nick, TotemColor color) {
         colorsByPlayer.put(nick, color);
         availableColors.remove(color);
         pendingLogs.add(nick + " picked " + color);
     }
 
+    /**
+     * Notifies the client that the match setup is complete and the game has started.
+     *
+     * @param playerOrder The initial turn order list.
+     * @param era The starting era.
+     */
     public synchronized void matchStarted(List<String> playerOrder, Era era) {
         this.currentEra = era;
         pendingLogs.add("MATCH STARTED. Era: " + era + ". Order: " + playerOrder);
     }
 
+    /**
+     * Updates the current Era of the game.
+     *
+     * @param newEra The new Era.
+     */
     public synchronized void eraChanged(Era newEra) {
         this.currentEra = newEra;
         pendingLogs.add("Era changed to " + newEra);
     }
 
+    /**
+     * Signals the start of a new round.
+     *
+     * @param round The round number.
+     */
     public synchronized void roundStarted(int round) {
         this.currentRound = round;
         pendingLogs.add("Round " + round + " started");
     }
 
+    /**
+     * Prompts the active player to place their totem on an offering tile.
+     *
+     * @param nick The nickname of the active player.
+     * @param trackSize The maximum valid index on the offering track.
+     */
     public synchronized void offeringTileTurn(String nick, int trackSize) {
         this.currentPhase = Phase.PICK_OFFERING_TILE;
         this.currentPlayer = nick;
@@ -309,10 +342,23 @@ public class ClientController {
         }
     }
 
+    /**
+     * Logs the placement of a totem by a player on an offering tile.
+     *
+     * @param nick The player's nickname.
+     * @param tileIndex The chosen offering track index.
+     */
     public synchronized void offeringTilePicked(String nick, int tileIndex) {
         pendingLogs.add(nick + " placed a totem on offering tile " + tileIndex);
     }
 
+    /**
+     * Prompts the active player to pick character cards within their designated budget.
+     *
+     * @param nick The active player.
+     * @param upperBudget The maximum number of upper row character cards allowed.
+     * @param lowerBudget The maximum number of lower row character cards allowed.
+     */
     public synchronized void characterPickTurn(String nick, int upperBudget, int lowerBudget) {
         this.currentPhase = Phase.TURN_PICK_CARDS_CHARACTER;
         this.currentPlayer = nick;
@@ -338,6 +384,13 @@ public class ClientController {
         }
     }
 
+    /**
+     * Logs the character cards successfully drawn by a player.
+     *
+     * @param nick The player's nickname.
+     * @param upper The list of upper row character cards picked.
+     * @param lower The list of lower row character cards picked.
+     */
     public synchronized void characterCardsPicked(String nick,
                                                   List<CharacterCard> upper,
                                                   List<CharacterCard> lower) {
@@ -352,6 +405,13 @@ public class ClientController {
         pendingLogs.add(nick + " drew " + total + " character card(s)");
     }
 
+    /**
+     * Prompts the active player to purchase building cards.
+     *
+     * @param nick The active player.
+     * @param upperRemaining Upper row allowance.
+     * @param lowerRemaining Lower row allowance.
+     */
     public synchronized void buildingPickTurn(String nick, int upperRemaining, int lowerRemaining) {
         this.currentPhase = Phase.TURN_PICK_CARDS_BUILDING;
         this.currentPlayer = nick;
@@ -377,6 +437,13 @@ public class ClientController {
         }
     }
 
+    /**
+     * Logs the building cards successfully constructed by a player.
+     *
+     * @param nick The player's nickname.
+     * @param upper The list of upper row buildings constructed.
+     * @param lower The list of lower row buildings constructed.
+     */
     public synchronized void buildingCardsBought(String nick,
                                                  List<BuildingCard> upper,
                                                  List<BuildingCard> lower) {
@@ -391,6 +458,11 @@ public class ClientController {
         pendingLogs.add(nick + " bought " + total + " building(s)");
     }
 
+    /**
+     * Prompts the player to perform a bonus extra pick action.
+     *
+     * @param nick The active player.
+     */
     public synchronized void extraPickTurn(String nick) {
         this.currentPhase = Phase.RESET_TURN_ORDER_AND_PICK_EXTRA_BUILDING;
         this.currentPlayer = nick;
@@ -412,6 +484,13 @@ public class ClientController {
         }
     }
 
+    /**
+     * Logs the completion of an extra pick turn.
+     *
+     * @param nick The player who made the pick.
+     * @param cardId The ID of the chosen card, or null if skipped.
+     * @param isCharacter True if it's a character card, false if it's a building.
+     */
     public synchronized void extraCardPicked(String nick, Integer cardId, boolean isCharacter) {
         if (cardId == null) {
             pendingLogs.add(nick + " skipped the extra pick");
@@ -421,22 +500,25 @@ public class ClientController {
         }
     }
 
+    /**
+     * Updates and logs a player's new prestige point total.
+     *
+     * @param nick The target player.
+     * @param newPrestige The updated prestige value.
+     */
     public synchronized void prestigeChanged(String nick, int newPrestige) {
         Integer prev = prestige.put(nick, newPrestige);
-        // Only log the change if the value ACTUALLY changed from a
-        // known previous one. We skip:
-        //   - prev == null   : first broadcast (e.g. the startMatch
-        //                      initial bundle with prestige=0/food=0).
-        //                      The user sees the value in the dump
-        //                      anyway, no need for an "X prestige -> 0".
-        //   - prev == new    : the server emits several scoring passes
-        //                      and sometimes the second one doesn't
-        //                      change anything.
         if (prev != null && prev != newPrestige) {
             pendingLogs.add(nick + " prestige -> " + newPrestige);
         }
     }
 
+    /**
+     * Updates and logs a player's new food token total.
+     *
+     * @param nick The target player.
+     * @param newFood The updated food value.
+     */
     public synchronized void foodChanged(String nick, int newFood) {
         Integer prev = food.put(nick, newFood);
         if (prev != null && prev != newFood) {
@@ -444,60 +526,77 @@ public class ClientController {
         }
     }
 
+    /** Logs the conclusion of the current game round. */
     public synchronized void roundEnded() {
         pendingLogs.add("Round ended");
     }
 
+    /**
+     * Notifies the client that the game has officially concluded.
+     *
+     * @param leaderboard The final ordered list of players.
+     * @param winners The list of winners.
+     */
     public synchronized void gameEnded(List<String> leaderboard, List<String> winners) {
         this.currentPhase = Phase.GAME_ENDED;
         this.finalLeaderboard = leaderboard;
         this.finalWinners = winners;
         pendingLogs.add("Game ended. Winners: " + winners);
         pendingGameEnded = true;
-        // NB: the latch countDown is moved to commit(), so the main
-        // thread doesn't exit awaitGameEnd before the final dump has
-        // actually been printed.
     }
 
+    /**
+     * Notifies the client that the match is currently paused due to network issues.
+     *
+     * @param reason The reason for pausing (e.g., player disconnected).
+     */
     public synchronized void matchPaused(String reason) {
         this.currentPhase = Phase.PAUSED_WAITING_RECONNECT;
         pendingLogs.add("Match paused: " + reason);
     }
 
+    /** Resumes a previously paused match. */
     public synchronized void matchResumed() {
         pendingLogs.add("Match resumed.");
     }
 
+    /**
+     * Notifies that another player has disconnected.
+     *
+     * @param nick The nickname of the disconnected player.
+     */
     public synchronized void playerDisconnected(String nick) {
+        joinedPlayers.remove(nick);
         pendingLogs.add(nick + " disconnected.");
     }
 
+    /**
+     * Notifies that a previously disconnected player has rejoined the match.
+     *
+     * @param nick The nickname of the reconnected player.
+     */
     public synchronized void playerReconnected(String nick) {
         pendingLogs.add(nick + " reconnected.");
     }
 
+    /**
+     * Queues an error notification to be displayed to the user when their
+     * last action was rejected by the server logic.
+     *
+     * @param reason The descriptive error reason.
+     */
     public synchronized void actionRejected(String reason) {
-        // Just stash it: the error gets printed by the next
-        // {@link #commit()} (in the "displayError" step), after the
-        // state dump and before the prompt.
         this.pendingError = reason;
     }
 
     /**
-     * The client's connect attempt was rejected by the server.
-     * Special case: print it RIGHT NOW (no commit) and trigger the
-     * latch, because this is a session terminator and no commit will
-     * follow.
+     * Handles a server response refusing the initially requested nickname.
+     * Displays an error and prompts for a new nickname if the error is recoverable.
+     *
+     * @param reason The specific reason the nickname was invalid (e.g., taken).
      */
     public synchronized void nicknameRejected(String reason) {
         view.displayError(reason);
-        // Retryable cases (duplicate nickname, bad syntax): the server
-        // is still accepting connects, just not THIS nickname. Prompt
-        // for a different one and re-send connect via the adapter's
-        // installed callback. We stay synchronized while prompting:
-        // no other event can usefully race in (server is waiting on
-        // the next connect from us), and any incoming callback after
-        // the retry just queues on the monitor.
         if (isRetryableConnectError(reason) && retryConnect != null) {
             view.displayInfo("Please choose a different nickname.");
             String newNick = view.promptNickname();
@@ -516,81 +615,79 @@ public class ClientController {
         endLatch.countDown();
     }
 
-    /**
-     * True for connect rejections the user can fix by trying again
-     * with a different nickname (e.g. "nickname already in use",
-     * "nickname too long (max 16)"). False for phase-level rejections
-     * such as "no game currently accepting players" or "cannot join
-     * right now", which mean the session has to close.
-     */
     private static boolean isRetryableConnectError(String reason) {
         return reason != null && reason.startsWith("nickname");
     }
 
     /**
-     * True iff the server refused our connect attempt (duplicate
-     * nickname, no game accepting, etc.). Network clients check this
-     * after {@link #awaitGameEnd()} to skip the trailing
-     * {@code disconnect()} call: shipping a disconnect for a nickname
-     * we never officially held would kick the legitimate holder out.
+     * Checks if the connection request was definitively rejected by the server.
+     *
+     * @return True if rejected, false otherwise.
      */
     public synchronized boolean wasConnectionRejected() {
         return connectionRejected;
     }
 
     /**
-     * Quietly updates the board mini-state (offering track,
-     * upper/lower row, turn order tile) with what came from the
-     * server. Does NOT call view.refresh(): the full dump is done
-     * by the following {@code *Turn} event that comes right after
-     * the board broadcast in the server controller. This way the
-     * game-state render shows up with the right phase AND a fresh
-     * board.
+     * Receives and stores a fresh board state from the server.
+     *
+     * @param board The updated game board entity.
      */
     public synchronized void boardSnapshot(Board board) {
         this.currentBoard = board;
     }
 
     /**
-     * End-of-bundle marker from the server. Runs, in order:
-     *   1. {@code view.refresh(this)} -- the one and only place
-     *      where the client prints the GAME STATE dump.
-     *   2. flush of {@link #pendingLogs} accumulated by the bundle's
-     *      handlers (one per line, via {@code displayInfo}).
-     *   3. any {@link #pendingError} via {@code displayError}.
-     *   4. any {@link #pendingPrompt}: blocks on stdin while still
-     *      holding the controller monitor (same semantics as the
-     *      old prompt-inside-handler approach).
-     *
-     * All the {@code onXxx} handlers just update state and queue
-     * logs/prompts; commit is the only render path. See
-     * {@code VirtualView#onCommit}.
+     * Acts as a barrier that applies all queued state changes, logs,
+     * and prompts collectively to the View to avoid partial or tearing updates.
      */
-    public synchronized void commit() {
+    /**
+     * Applica tutti i cambiamenti di stato alla View.
+     */
+    public void commit() {
+        Runnable p;
+        boolean ended;
+        String err;
+        List<String> logs;
+
+        // 1. Leggiamo i dati e svuotiamo le code in modo sicuro e rapidissimo
+        synchronized (this) {
+            err = pendingError;
+            pendingError = null;
+
+            p = pendingPrompt;
+            pendingPrompt = null;
+
+            ended = pendingGameEnded;
+            pendingGameEnded = false;
+
+            logs = new ArrayList<>(pendingLogs);
+            pendingLogs.clear();
+        }
+
+        // 2. FUORI DAL LUCCHETTO: Aggiorniamo la grafica senza bloccare il Controller
         view.refresh(this);
-        for (String log : pendingLogs) {
+        for (String log : logs) {
             view.displayInfo(log);
         }
-        pendingLogs.clear();
-        String err = pendingError;
-        pendingError = null;
         if (err != null) {
             view.displayError(err);
         }
-        Runnable p = pendingPrompt;
-        pendingPrompt = null;
+
+        // 3. FUORI DAL LUCCHETTO: Il Thread di rete ora può mettersi in pausa
+        // aspettando l'input dell'utente senza bloccare il Thread Grafico!
         if (p != null) {
             p.run();
         }
-        if (pendingGameEnded) {
-            pendingGameEnded = false;
+        if (ended) {
             endLatch.countDown();
         }
     }
-
     /**
-     * Fully rebuilds the mini-state from the received snapshot. Used
-     * both on initial client arrival and on reconnect.
+     * Reconstructs the entire client controller state from a complete server snapshot.
+     * Useful for recovering from disconnections.
+     *
+     * @param s The complete GameSnapshot object.
      */
     public synchronized void gameSnapshot(GameSnapshot s) {
         this.currentPhase = s.getCurrentPhase();
@@ -631,24 +728,66 @@ public class ClientController {
         this.expectedPlayers = s.getExpectedPlayers();
         this.finalLeaderboard = s.getLeaderboard();
         this.finalWinners = s.getWinners();
-        // NB: the dump comes from the {@link #commit()} that the
-        // server appends after onGameSnapshot. Here we just swap the
-        // state.
     }
-
-    // ====================================================================
-    // Internal helper: send with RemoteException catch
-    // ====================================================================
 
     private interface SafeSend {
         void send() throws RemoteException;
     }
 
+    /**
+     * Wrapper logic to catch RMI exceptions when communicating with the Server
+     * and forwarding them to the View's displayError.
+     *
+     * @param action The specific network transmission block to run.
+     */
     private void sendOrError(SafeSend action) {
         try {
             action.send();
         } catch (RemoteException e) {
             view.displayError("Send failed: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Disconnette l'utente dalla lobby senza chiudere il thread di rete.
+     * Mantiene l'operaio di rete "parcheggiato" e in ascolto per una nuova partita.
+     */
+    public synchronized void leaveLobbySoft() {
+        System.out.println("LOG: Player manually left the lobby. Disconnecting...");
+        sendOrError(new SafeSend() {
+            @Override public void send() throws RemoteException {
+                virtualServer.disconnect(myNickname);
+            }
+        });
+
+        // ==========================================
+        // FIX: PULIZIA DELLA MEMORIA LOCALE (AMNESIA)
+        // ==========================================
+        this.joinedPlayers.clear();
+        this.expectedPlayers = 0;
+        this.currentPlayer = null;
+        this.currentPhase = Phase.WAITING_FOR_NICKNAME;
+        this.colorsByPlayer.clear();
+        this.availableColors.clear();
+        this.pendingLogs.clear();
+        this.pendingError = null;
+        this.pendingPrompt = null;
+        // ==========================================
+
+        // IMPORTANTE: NON chiamiamo endLatch.countDown();
+        // In questo modo la rete non muore e aspetta ordini dalla GUI.
+    }
+
+    /**
+     * Sfrutta il callback di retry della rete per simulare un nuovo accesso
+     * senza dover ricreare la connessione RMI o Socket da zero.
+     *  @param newNickname The updated nickname to try.
+     */
+    public synchronized void reconnectNewGame(String newNickname) {
+        this.myNickname = newNickname;
+        if (retryConnect != null) {
+            System.out.println("LOG: Reconnecting to server with new nickname: " + newNickname);
+            retryConnect.run();
         }
     }
 }

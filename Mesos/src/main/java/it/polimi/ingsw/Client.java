@@ -3,7 +3,8 @@ package it.polimi.ingsw;
 import it.polimi.ingsw.common.VirtualServer;
 import it.polimi.ingsw.rmi.client.Rmi_Client;
 import it.polimi.ingsw.socket.client.Socket_Client;
-import it.polimi.ingsw.view.GUI.GuiView;
+import it.polimi.ingsw.view.gui.GuiLauncher;
+import it.polimi.ingsw.view.gui.GuiView;
 import it.polimi.ingsw.view.TUI.TuiView;
 import it.polimi.ingsw.view.View;
 
@@ -12,6 +13,7 @@ import java.net.Socket;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.util.Scanner;
+import java.util.concurrent.CountDownLatch;
 
 public class Client {
 
@@ -35,15 +37,48 @@ public class Client {
                 ? Integer.parseInt(args[1])
                 : (protocol.equals("rmi") ? DEFAULT_RMI_PORT : DEFAULT_SOCKET_PORT);
 
-        // Reuse the same Scanner inside TuiView. Scanner read-aheads from
-        // System.in into its own buffer, so two Scanners on the same
-        // stream would steal input from each other. One per JVM.
+        // Reuse the same Scanner inside TuiView.
         View view = viewType.equals("gui") ? new GuiView() : new TuiView(scan);
 
-        if (protocol.equals("socket")) {
-            startSocketClient(host, port, view);
-        } else if (protocol.equals("rmi")) {
-            startRmiClient(host, port, view);
+        if (viewType.equals("gui")) {
+            // Latch che si sblocca quando JavaFX ha registrato il mainStage.
+            // Il network thread DEVE aspettare che la finestra sia aperta prima
+            // di chiamare promptNickname(), altrimenti GuiView.mainStage è null
+            // e tutti i popup vengono creati senza owner.
+            CountDownLatch fxReady = new CountDownLatch(1);
+            GuiView.setOnStageReady(fxReady::countDown);
+
+            // 1. Avviamo il thread di rete in background.
+            // È un daemon thread: quando JavaFX chiude la finestra, la JVM
+            // termina automaticamente anche questo thread.
+            Thread networkThread = new Thread(() -> {
+                try {
+                    // Aspetta che GuiLauncher.start() abbia chiamato
+                    // GuiView.setMainStage() prima di procedere con la rete.
+                    fxReady.await();
+
+                    if (protocol.equals("socket")) {
+                        startSocketClient(host, port, view);
+                    } else {
+                        startRmiClient(host, port, view);
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            });
+            networkThread.setDaemon(true);
+            networkThread.start();
+
+            // 2. Avviamo la grafica sul thread principale (bloccante).
+            GuiLauncher.main(new String[0]);
+
+        } else {
+            // TUI: rete sul thread principale, bloccante su Scanner.
+            if (protocol.equals("socket")) {
+                startSocketClient(host, port, view);
+            } else if (protocol.equals("rmi")) {
+                startRmiClient(host, port, view);
+            }
         }
     }
 

@@ -13,9 +13,8 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Integration Test class for the {@link Match} aggregate root.
  * <p>
- * Unlike Unit Tests, this class verifies the interaction between multiple
- * instantiated components (Match, Board, Decks, Cards) and relies on the
- * actual loading of external resources (e.g., JSON files).
+ * This class verifies the interaction between multiple
+ * instantiated components (Match, Board, Decks, Cards) and relies on the loading of the JSON file.
  * <p>
  * It simulates real game flows, such as the complete setup of the board
  * and the transition between complex game states.
@@ -46,7 +45,7 @@ class MatchIT {
     /**
      * Integrates Match, Decks, and Board to verify the complete game setup.
      * <p>
-     * This test ensures that calling startMatch() correctly reads the JSON files,
+     * This test ensures that calling startMatch() correctly reads the JSON file,
      * populates the decks, sets the round to 1, and physically deals the cards
      * and tiles onto the Board according to the number of players.
      *
@@ -63,7 +62,7 @@ class MatchIT {
         // 2. VERIFY MATCH STATE
         assertEquals(1, match.getCurrentRound(), "The game should officially start at Round 1");
 
-        // 3. VERIFY BOARD POPULATION (The real integration check)
+        // 3. VERIFY BOARD POPULATION
         Board board = match.getBoard();
         assertNotNull(board, "Board must exist");
 
@@ -76,7 +75,7 @@ class MatchIT {
         CardRow lowerRow = board.getLowerRow();
         assertNotNull(lowerRow, "Lower row must be initialized");
 
-        // Rule verification: The lower row must contain ONLY characters after setup
+        //Check characters fill the lower row after setup
         assertFalse(lowerRow.getCharacterCards().isEmpty(),
                 "Lower row should be populated with character cards right after the setup");
 
@@ -100,7 +99,7 @@ class MatchIT {
      * Simulates the transition from Round 1 to Round 2.
      * <p>
      * Verifies that after a full setup, the game can successfully transition
-     * rounds without crashing, moving cards correctly between the upper and
+     * rounds, moving cards correctly between the upper and
      * lower rows on the Board.
      */
     @Test
@@ -117,6 +116,7 @@ class MatchIT {
         // Verify the state change
         assertEquals(2, match.getCurrentRound(), "Round counter must increment to 2");
 
+        //TODO
         // Note: A more specific assertion here would check if the Upper Row cards
         // correctly moved to the Lower Row, but that depends on specific Board getters.
     }
@@ -124,8 +124,8 @@ class MatchIT {
     /**
      * Verifies the resolution of the Turn Order Tile effect on players.
      * <p>
-     * In a real integration scenario, totems are placed on the tile, and the
-     * Match must cross-reference the tile slots with the actual Player instances
+     * In the game totems are placed on the tile, and the
+     * Match must cross-reference the tile slots with the Player instances
      * to correctly award Food and Prestige Points.
      */
     @Test
@@ -143,7 +143,7 @@ class MatchIT {
         match.resolveTurnOrderTile();
 
         // Verify that AT LEAST ONE player received something (since they are on the slots)
-        // Since slot rewards vary, we check the aggregate state of the players.
+        // Since slot rewards vary, check the aggregate state of the players.
         int totalFoodInGame = p1.getFood() + p2.getFood() + p3.getFood();
         int totalPPInGame = p1.getPrestigePoints() + p2.getPrestigePoints() + p3.getPrestigePoints();
 

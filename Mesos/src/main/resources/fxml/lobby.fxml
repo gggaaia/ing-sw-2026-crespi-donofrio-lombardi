@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ScrollPane?>
+<?import javafx.scene.effect.DropShadow?>
+<?import javafx.scene.image.Image?>
+<?import javafx.scene.image.ImageView?>
+<?import javafx.scene.layout.AnchorPane?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.paint.Color?>
+<?import javafx.scene.text.Font?>
+
+<AnchorPane prefHeight="250.0" prefWidth="400.0" style="-fx-background-radius: 30;" xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1" fx:controller="it.polimi.ingsw.view.gui.LobbyController">
+   <children>
+      <ImageView fx:id="sfondoPopup" fitHeight="250.0" fitWidth="400.0" pickOnBounds="true">
+         <image>
+            <Image url="@../images/popup_background.png" />
+         </image>
+      </ImageView>
+      <Button layoutX="14.0" layoutY="13.0" mnemonicParsing="false" onAction="#onLeaveClicked" style="-fx-background-radius: 20; -fx-background-color: #D85F2Bff; -fx-border-color: #7B3C1F; -fx-border-radius: 20;" text="Leave" textAlignment="CENTER" textFill="#efe4cb">
+         <font>
+            <Font name="Tempus Sans ITC" size="12.0" />
+         </font>
+         <effect>
+            <DropShadow>
+               <color>
+                  <Color opacity="0.3409668803215027" />
+               </color>
+            </DropShadow>
+         </effect>
+      </Button>
+      <Label layoutX="137.0" layoutY="19.0" text="MATCH LOBBY" textFill="#efe4cb">
+         <font>
+            <Font name="Tempus Sans ITC" size="18.0" />
+         </font>
+      </Label>
+      <Label fx:id="statusLabel" alignment="TOP_CENTER" contentDisplay="CENTER" graphicTextGap="0.0" layoutX="122.0" layoutY="41.0" lineSpacing="10.0" text="Waiting for players...  n/m" textFill="#efe4cb">
+         <font>
+            <Font name="Tempus Sans ITC" size="14.0" />
+         </font>
+      </Label>
+      <ScrollPane hbarPolicy="NEVER" layoutX="74.0" layoutY="69.0" style="-fx-background-color: transparent; -fx-background: transparent;">
+         <content>
+            <VBox fx:id="playersContainer" alignment="TOP_CENTER" prefHeight="163.0" prefWidth="248.0" spacing="10.0">
+               <children>
+                  <VBox fx:id="plaersContainer" prefHeight="167.0" prefWidth="248.0" spacing="10.0" />
+               </children>
+            </VBox>
+         </content>
+      </ScrollPane>
+   </children>
+</AnchorPane>
