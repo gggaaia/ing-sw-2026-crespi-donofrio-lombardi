@@ -165,6 +165,11 @@ public class GuiView implements View {
                     currentPhase != Phase.COLOR_PICKING);
 
             if (isGameStarted) {
+                // If the match is already in progress and a setup popup (e.g., Nickname) is displayed, close it.
+                if (currentPopupStage != null && currentPopupStage.isShowing()) {
+                    currentPopupStage.close();
+                    currentPopupStage = null;
+                }
                 ensureGameBoardLoaded();
 
                 if (isGameBoardLoaded && boardController != null) {

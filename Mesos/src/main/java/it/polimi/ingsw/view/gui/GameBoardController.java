@@ -162,7 +162,8 @@ public class GameBoardController {
      */
     private void updatePlayersRecap(ClientController state) {
         if (leftOpponentsBox == null || rightOpponentsBox == null || myStatusBox == null) return;
-
+        leftOpponentsBox.setMinWidth(260);
+        rightOpponentsBox.setMinWidth(260);
         leftOpponentsBox.getChildren().clear();
         rightOpponentsBox.getChildren().clear();
 

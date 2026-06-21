@@ -2,6 +2,7 @@
 
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ScrollPane?>
 <?import javafx.scene.image.Image?>
 <?import javafx.scene.image.ImageView?>
 <?import javafx.scene.layout.AnchorPane?>
@@ -11,83 +12,98 @@
 <?import javafx.scene.text.Font?>
 
 <AnchorPane prefHeight="720.0" prefWidth="1280.0" xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1" fx:controller="it.polimi.ingsw.view.gui.GameBoardController">
-   <children>
-      <ImageView fitHeight="720.0" fitWidth="1280.0" pickOnBounds="true">
-         <image>
-            <Image url="@../images/board_bg%20(1).png" />
-         </image>
-      </ImageView>
-      <BorderPane layoutX="552.0" layoutY="269.0" prefHeight="200.0" prefWidth="200.0" AnchorPane.bottomAnchor="0.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" AnchorPane.topAnchor="0.0">
-         <center>
-            <VBox prefHeight="200.0" prefWidth="100.0" spacing="15.0" BorderPane.alignment="CENTER">
-               <BorderPane.margin>
-                  <Insets bottom="10.0" left="10.0" right="10.0" top="10.0" />
-               </BorderPane.margin>
-               <children>
-                  <HBox fx:id="upperRowBox" alignment="CENTER" prefHeight="140.0" prefWidth="200.0" spacing="10.0">
-                     <padding>
-                        <Insets top="20.0" />
-                     </padding>
-                  </HBox>
-                  <HBox alignment="CENTER" prefHeight="100.0" prefWidth="200.0" spacing="40.0">
-                     <children>
-                        <HBox fx:id="decksBox" alignment="CENTER" spacing="5.0" />
-                        <HBox fx:id="turnOrderBox" alignment="CENTER" prefHeight="140.0" prefWidth="200.0" spacing="5.0" />
-                        <HBox fx:id="offeringTrackBox" alignment="CENTER" prefHeight="140.0" prefWidth="200.0" spacing="5.0" />
-                     </children>
-                  </HBox>
-                  <HBox fx:id="lowerRowBox" alignment="CENTER" prefHeight="140.0" prefWidth="200.0" spacing="10.0" />
-               </children>
-               <padding>
-                  <Insets top="10.0" />
-               </padding>
-            </VBox>
-         </center>
-         <bottom>
-            <VBox alignment="TOP_CENTER" prefHeight="200.0" prefWidth="100.0" BorderPane.alignment="CENTER">
-               <children>
-                  <HBox fx:id="myStatusBox" alignment="CENTER_LEFT" prefHeight="120.0" prefWidth="200.0" spacing="30.0">
-                     <padding>
-                        <Insets bottom="10.0" left="20.0" right="20.0" top="10.0" />
-                     </padding>
-                  </HBox>
-                  <HBox alignment="CENTER" prefHeight="40.0" prefWidth="200.0" />
-               </children>
-            </VBox>
-         </bottom>
-         <left>
-            <VBox fx:id="leftOpponentsBox" prefHeight="645.0" prefWidth="220.0" spacing="15.0" BorderPane.alignment="CENTER" />
-         </left>
-         <right>
-            <VBox fx:id="rightOpponentsBox" prefHeight="200.0" prefWidth="220.0" spacing="15.0" BorderPane.alignment="CENTER" />
-         </right>
-         <top>
-            <VBox spacing="10.0" BorderPane.alignment="CENTER">
-               <children>
-                  <HBox alignment="CENTER" prefHeight="40.0" prefWidth="80.0" spacing="10.0" style="-fx-background-color: #D85F2Bff;">
-                     <children>
-                        <ImageView fitHeight="30.0" fitWidth="153.0" pickOnBounds="true" preserveRatio="true">
-                           <image>
-                              <Image url="@../images/logo.png" />
-                           </image>
-                        </ImageView>
-                     </children>
-                  </HBox>
-                  <HBox alignment="CENTER" prefHeight="30.0" prefWidth="200.0" style="-fx-background-color: #D85F2Bff; -fx-background-radius: 20;">
-                     <children>
-                        <Label fx:id="phaseLabel" alignment="CENTER" style="-fx-background-color: #D85F2Bff;" text="Label" textFill="#efe4cb">
-                           <font>
-                              <Font name="Tempus Sans ITC" size="18.0" />
-                           </font>
-                        </Label>
-                     </children>
-                     <padding>
-                        <Insets left="10.0" top="10.0" />
-                     </padding>
-                  </HBox>
-               </children>
-            </VBox>
-         </top>
-      </BorderPane>
-   </children>
+    <children>
+        <ImageView fitHeight="720.0" fitWidth="1280.0" pickOnBounds="true">
+            <image>
+                <Image url="@../images/board_bg%20(1).png" />
+            </image>
+        </ImageView>
+        <BorderPane layoutX="552.0" layoutY="269.0" prefHeight="200.0" prefWidth="200.0" AnchorPane.bottomAnchor="0.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" AnchorPane.topAnchor="0.0">
+            <center>
+                <VBox prefWidth="100.0" spacing="5.0" BorderPane.alignment="CENTER">
+                    <BorderPane.margin>
+                        <Insets bottom="10.0" left="10.0" right="10.0" top="10.0" />
+                    </BorderPane.margin>
+                    <children>
+
+                        <ScrollPane minHeight="155.0" prefHeight="155.0" fitToHeight="true" hbarPolicy="AS_NEEDED" vbarPolicy="NEVER" style="-fx-background: transparent; -fx-background-color: transparent;">
+                            <content>
+                                <HBox fx:id="upperRowBox" alignment="CENTER" prefHeight="140.0" spacing="10.0" />
+                            </content>
+                        </ScrollPane>
+
+                        <ScrollPane minHeight="155.0" prefHeight="155.0" fitToHeight="true" hbarPolicy="AS_NEEDED" vbarPolicy="NEVER" style="-fx-background: transparent; -fx-background-color: transparent;">
+                            <content>
+                                <HBox alignment="CENTER" prefHeight="140.0" spacing="20.0">
+                                    <children>
+                                        <HBox fx:id="decksBox" alignment="CENTER" spacing="5.0" />
+                                        <HBox fx:id="turnOrderBox" alignment="CENTER" prefHeight="140.0" spacing="5.0" />
+                                        <HBox fx:id="offeringTrackBox" alignment="CENTER" prefHeight="140.0" spacing="5.0" />
+                                    </children>
+                                    <padding>
+                                        <Insets bottom="20.0" />
+                                    </padding>
+                                </HBox>
+                            </content>
+                        </ScrollPane>
+
+                        <ScrollPane minHeight="155.0" prefHeight="155.0" fitToHeight="true" hbarPolicy="AS_NEEDED" vbarPolicy="NEVER" style="-fx-background: transparent; -fx-background-color: transparent;">
+                            <content>
+                                <HBox fx:id="lowerRowBox" alignment="CENTER" prefHeight="140.0" spacing="10.0" />
+                            </content>
+                        </ScrollPane>
+
+                    </children>
+                    <padding>
+                        <Insets top="10.0" />
+                    </padding>
+                </VBox>
+            </center>
+            <bottom>
+                <VBox alignment="TOP_CENTER" BorderPane.alignment="CENTER">
+                    <children>
+                        <HBox fx:id="myStatusBox" alignment="CENTER_LEFT" prefHeight="120.0" prefWidth="200.0" spacing="30.0">
+                            <padding>
+                                <Insets bottom="10.0" left="20.0" right="20.0" top="10.0" />
+                            </padding>
+                        </HBox>
+                        <HBox alignment="CENTER" prefHeight="10.0" prefWidth="200.0" />
+                    </children>
+                </VBox>
+            </bottom>
+            <left>
+                <VBox fx:id="leftOpponentsBox" prefHeight="645.0" prefWidth="220.0" spacing="15.0" BorderPane.alignment="CENTER" />
+            </left>
+            <right>
+                <VBox fx:id="rightOpponentsBox" prefHeight="200.0" prefWidth="220.0" spacing="15.0" BorderPane.alignment="CENTER" />
+            </right>
+            <top>
+                <VBox spacing="10.0" BorderPane.alignment="CENTER">
+                    <children>
+                        <HBox alignment="CENTER" prefHeight="40.0" prefWidth="80.0" spacing="10.0" style="-fx-background-color: #D85F2Bff;">
+                            <children>
+                                <ImageView fitHeight="30.0" fitWidth="153.0" pickOnBounds="true" preserveRatio="true">
+                                    <image>
+                                        <Image url="@../images/logo.png" />
+                                    </image>
+                                </ImageView>
+                            </children>
+                        </HBox>
+                        <HBox alignment="CENTER" prefHeight="30.0" prefWidth="200.0" style="-fx-background-color: #D85F2Bff; -fx-background-radius: 20;">
+                            <children>
+                                <Label fx:id="phaseLabel" alignment="CENTER" style="-fx-background-color: #D85F2Bff;" text="Label" textFill="#efe4cb">
+                                    <font>
+                                        <Font name="Tempus Sans ITC" size="18.0" />
+                                    </font>
+                                </Label>
+                            </children>
+                            <padding>
+                                <Insets left="10.0" top="10.0" />
+                            </padding>
+                        </HBox>
+                    </children>
+                </VBox>
+            </top>
+        </BorderPane>
+    </children>
 </AnchorPane>
