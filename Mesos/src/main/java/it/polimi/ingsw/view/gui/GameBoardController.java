@@ -30,8 +30,16 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * Main JavaFX Controller for the Game Board GUI.
+ * This class is responsible for rendering the entire game state (cards, tracks, player boards)
+ * and handling user asynchronous interactions (selections, prompts) during the match.
+ * It strictly separates the view logic from the underlying model logic, deriving necessary UI
+ * statistics dynamically from the provided {@link ClientController} state.
+ */
 public class GameBoardController {
 
+    // --- FXML UI Elements ---
     @FXML private VBox leftOpponentsBox;
     @FXML private VBox rightOpponentsBox;
     @FXML private HBox myStatusBox;
@@ -42,7 +50,12 @@ public class GameBoardController {
     @FXML private HBox decksBox;
     @FXML private Label phaseLabel;
 
-    //memory for prompts
+    // --- Interaction Memory State ---
+    /* We use CompletableFuture to bridge the gap between the asynchronous,
+     * event-driven nature of JavaFX (mouse clicks) and the synchronous request/response
+     * flow of the game network protocol. These variables store the current prompt state.
+     */
+
     private boolean isOfferingPromptActive = false;
     private int activeOfferingTrackSize = 0;
     private CompletableFuture<Integer> activeOfferingFuture = null;
@@ -58,12 +71,19 @@ public class GameBoardController {
     private String activeSingleCardTargetType = "";
     private CompletableFuture<Integer> activeSingleCardFuture = null;
 
+    /**
+     * Refreshes the entire game board UI based on the current state from the ClientController.
+     * This method executes UI updates on the JavaFX Application Thread.
+     *
+     * @param state The current ClientController containing the updated game model.
+     */
     public void updateBoard(ClientController state) {
         Platform.runLater(() -> {
             try {
+                // Update phase label only if there are no active user prompts
                 if (phaseLabel != null && !isOfferingPromptActive && !isCardPromptActive && !isSingleCardPromptActive) {
                     phaseLabel.setText(state.getCurrentPhase() + " | Active Player: " + state.getCurrentPlayer());
-                    phaseLabel.setTextFill(Color.WHITE);
+                    phaseLabel.setTextFill(Color.web("#EFE4CB"));
                 }
 
                 updatePlayersRecap(state);
@@ -77,6 +97,7 @@ public class GameBoardController {
                     updateDecks();
                 }
 
+                // Re-apply visual cues if a prompt was active during the refresh
                 if (isOfferingPromptActive) applyOfferingTileSelectionVisuals();
                 if (isCardPromptActive) applyCardSelectionVisuals();
                 if (isSingleCardPromptActive) applySingleCardSelectionVisuals();
@@ -87,6 +108,9 @@ public class GameBoardController {
         });
     }
 
+    /**
+     * Renders the deck placeholders on the board.
+     */
     private void updateDecks() {
         if (decksBox == null) return;
         decksBox.getChildren().clear();
@@ -94,6 +118,13 @@ public class GameBoardController {
         decksBox.getChildren().add(createDeckNode("back_96"));
     }
 
+    /**
+     * Creates a visual node representing a card deck back.
+     * Provides a text fallback if the image resource is missing.
+     *
+     * @param backImageName The filename of the deck back image.
+     * @return A StackPane containing the deck visual.
+     */
     private StackPane createDeckNode(String backImageName) {
         StackPane pane = new StackPane();
         pane.setPrefSize(100, 140);
@@ -119,25 +150,34 @@ public class GameBoardController {
         return pane;
     }
 
+    /**
+     * Updates the player recap panels (current player at the bottom, opponents on the sides).
+     * Since the client only receives raw lists of cards and not the server-side
+     * Player object (which contains pre-calculated metrics), this method dynamically calculates
+     * derived metrics (like building discounts, sustenance counts, inventor icons) by iterating
+     * over the known cards in hand; this is only for the purpose of showing the metrics on screen,
+     * all the metrics used in the game logic are calculated on the server side.
+     *
+     * @param state The ClientController providing the state of all players.
+     */
     private void updatePlayersRecap(ClientController state) {
         if (leftOpponentsBox == null || rightOpponentsBox == null || myStatusBox == null) return;
 
         leftOpponentsBox.getChildren().clear();
         rightOpponentsBox.getChildren().clear();
 
-        // Keep the confirmation button if present
-        //FIXME da capire @Gaia
-        javafx.scene.Node confirmBtn = null;
+        // Keep the action buttons if present during a UI refresh to avoid losing prompt interactions
+        javafx.scene.Node actionBox = null;
         for (javafx.scene.Node n : myStatusBox.getChildren()) {
-            if ("confirmSelectionBtn".equals(n.getId())) {
-                confirmBtn = n;
+            if ("actionButtonsBox".equals(n.getId()) || "confirmSelectionBtn".equals(n.getId())) {
+                actionBox = n;
                 break;
             }
         }
         myStatusBox.getChildren().clear();
         myStatusBox.setStyle("-fx-background-color: transparent;");
 
-        // BOX WITH MATCH INFORMATION
+        // --- MATCH INFORMATION BOX ---
         VBox gameInfoBox = new VBox(8);
         gameInfoBox.setStyle("-fx-background-color: #562A2Cff; -fx-border-color: #EFE4CB; -fx-border-width: 2; -fx-border-radius: 5; -fx-padding: 10;");
         String eraStr = (state.getCurrentEra() != null) ? state.getCurrentEra().name().replace("ERA_", "") : "1";
@@ -161,78 +201,133 @@ public class GameBoardController {
             TotemColor color = (state.getColorsByPlayer() != null) ? state.getColorsByPlayer().get(p) : null;
             int pp = (state.getPrestige() != null && state.getPrestige().containsKey(p)) ? state.getPrestige().get(p) : 0;
             int f = (state.getFood() != null && state.getFood().containsKey(p)) ? state.getFood().get(p) : 0;
-            int buildSize = (state.getBuildingsByPlayer() != null && state.getBuildingsByPlayer().containsKey(p)) ? state.getBuildingsByPlayer().get(p).size() : 0;
 
             // COUNTER CALCULATIONS
             int numArtist = 0, numShaman = 0, numBuilder = 0, numGatherer = 0, numHunter = 0, numInventor = 0;
+
+            // Extra derived metrics
             int extraStars = 0;
+            int farmerDiscount = 0;
+            int buildingDiscount = 0;
+            int peopleToFeed = 0;
+            int inventorIcons = 0;
+
+            // Set to count unique Inventor icons
+            java.util.Set<it.polimi.ingsw.model.enums.InventorIcon> distinctInventorIcons = new java.util.HashSet<>();
 
             if (state.getHandsByPlayer() != null && state.getHandsByPlayer().containsKey(p)) {
-                for (CharacterCard c : state.getHandsByPlayer().get(p)) {
+                List<CharacterCard> hand = state.getHandsByPlayer().get(p);
+                // Sustenance: The number of people to feed is the total number of character cards
+                peopleToFeed = hand.size();
+
+                for (CharacterCard c : hand) {
                     if (c instanceof it.polimi.ingsw.model.card.character.Artist) numArtist++;
                     else if (c instanceof it.polimi.ingsw.model.card.character.Shaman shaman) {
                         numShaman++;
                         extraStars += shaman.getStars();
                     }
-                    else if (c instanceof it.polimi.ingsw.model.card.character.Builder) numBuilder++;
+                    else if (c instanceof it.polimi.ingsw.model.card.character.Builder builder) {
+                        numBuilder++;
+                        buildingDiscount += builder.getBuildingCostRedux();
+                    }
                     else if (c instanceof it.polimi.ingsw.model.card.character.Gatherer) numGatherer++;
                     else if (c instanceof it.polimi.ingsw.model.card.character.Hunter) numHunter++;
-                    else if (c instanceof it.polimi.ingsw.model.card.character.Inventor) numInventor++;
+                    else if (c instanceof it.polimi.ingsw.model.card.character.Inventor inventor) {
+                        numInventor++;
+                        if (inventor.getInventorIcon() != null) {
+                            distinctInventorIcons.add(inventor.getInventorIcon());
+                        }
+                    }
                 }
             }
 
+            // Calculations automatically deduced from characters in hand
+            inventorIcons = distinctInventorIcons.size();
+            farmerDiscount = numGatherer; // Base sustenance discount is equal to the number of Gatherers
+
+            // Apply modifiers provided by constructed Buildings
             if (state.getBuildingsByPlayer() != null && state.getBuildingsByPlayer().containsKey(p)) {
                 for (BuildingCard b : state.getBuildingsByPlayer().get(p)) {
                     if (b instanceof it.polimi.ingsw.model.card.building.RitualStarBonus) {
                         extraStars += 3;
+                    }
+                    else if (b instanceof it.polimi.ingsw.model.card.building.SustenanceBonusGatherer) {
+                        farmerDiscount += numGatherer;
+                    }
+                    else if (b instanceof it.polimi.ingsw.model.card.building.SustenanceBonusPainter) {
+                        farmerDiscount += numArtist;
+                    }
+                    else if (b instanceof it.polimi.ingsw.model.card.building.SustenanceBonusInventor) {
+                        farmerDiscount += numInventor;
                     }
                 }
             }
 
             String hexColor = toHexString(getJavaFXColor(color));
 
-            // Building rows in the boxes
+            // --- BUILD STAT ROWS ---
+            // ROW 1: Food | People to feed | Farmer Discount
             HBox row1 = new HBox(15);
             row1.getChildren().addAll(
-                    createIconStat("Food_icon.jpg", f, 22),
-                    createIconStat("Artist_icon.jpg", numArtist, 22),
-                    createIconStat("Buildings_icon.jpg", buildSize, 22)
+                    createIconStat("Food_icon.png", f, 22),
+                    createIconStat("Tribe_icon.png", peopleToFeed, 22),
+                    createIconStat("Farmer_discount_icon.png", farmerDiscount, 22)
             );
 
+            // ROW 2: Stars | Building Discount | Inventor Icons
             HBox row2 = new HBox(15);
             row2.getChildren().addAll(
-                    createIconStat("Ppoints_icon.png", pp, 22),
-                    createIconStat("Constructor_icon.jpg", numBuilder, 22),
-                    createIconStat("Farmer_icon.jpg", numGatherer, 22)
+                    createIconStat("Shaman_stars_icon.png", extraStars, 22),
+                    createIconStat("Constructor_discount_icon.png", buildingDiscount, 22),
+                    createIconStat("Inventor_icon.png", inventorIcons, 22)
             );
 
+            // ROW 3: Characters (Artists, Builders, Gatherers)
             HBox row3 = new HBox(15);
             row3.getChildren().addAll(
-                    createIconStat("Hunter_icon.jpg", numHunter, 22),
-                    createIconStat("Inventor_icon.jpg", numInventor, 22),
-                    createIconStat("Shaman_icon.jpg", numShaman, 22)
+                    createIconStat("Artist_icon.png", numArtist, 22),
+                    createIconStat("Constructor_icon.png", numBuilder, 22),
+                    createIconStat("Farmer_icon.png", numGatherer, 22)
             );
 
+            // ROW 4: Characters (Hunters, Inventors, Shamans)
+            HBox row4 = new HBox(15);
+            row4.getChildren().addAll(
+                    createIconStat("Hunter_icon.png", numHunter, 22),
+                    createIconStat("Inventor_icon.png", numInventor, 22),
+                    createIconStat("Shaman_icon.png", numShaman, 22)
+            );
+
+            // --- POPULATE PLAYER PANELS ---
             if (p.equals(myName)) {
-                // Current player panel
+                // Main player panel (Bottom)
                 myStatusBox.setStyle("-fx-background-color: #562A2Cff; -fx-border-color: " + hexColor + "; -fx-border-width: 3; -fx-border-radius: 10; -fx-background-radius: 10; -fx-padding: 10;");
-                myStatusBox.setSpacing(30);
+                myStatusBox.setSpacing(15);
 
                 VBox nameBox = new VBox(5);
                 nameBox.setAlignment(Pos.CENTER_LEFT);
                 Label nameLbl = new Label(p + " (YOU)");
                 nameLbl.setFont(Font.font("Tempus Sans ITC", FontWeight.BOLD, 18));
                 nameLbl.setTextFill(getJavaFXColor(color));
+
+                // Prestige Points: displayed only textually below the name
                 Label ppLbl = new Label("Prestige: " + pp);
                 ppLbl.setTextFill(Color.GOLD); ppLbl.setFont(Font.font("Tempus Sans ITC", FontWeight.BOLD, 14));
                 nameBox.getChildren().addAll(nameLbl, ppLbl);
 
-                myStatusBox.getChildren().addAll(nameBox, row1, row2, row3);
-                if (confirmBtn != null) myStatusBox.getChildren().add(confirmBtn);
+                // Insert vertical separators between rows for cleaner UX
+                myStatusBox.getChildren().addAll(
+                        nameBox,
+                        createSeparator(true), row1,
+                        createSeparator(true), row2,
+                        createSeparator(true), row3,
+                        createSeparator(true), row4
+                );
+                if (actionBox != null) myStatusBox.getChildren().add(actionBox);
 
             } else {
-                // Opponents panels
-                VBox oppBox = new VBox(10);
+                // Opponents panels (Left/Right)
+                VBox oppBox = new VBox(8);
                 oppBox.setStyle("-fx-background-color: #562A2Cff; -fx-border-color: " + hexColor + "; -fx-border-width: 2; -fx-border-radius: 5; -fx-padding: 10;");
 
                 HBox topRow = new HBox(10);
@@ -240,11 +335,19 @@ public class GameBoardController {
                 Label nameLbl = new Label(p);
                 nameLbl.setFont(Font.font("Tempus Sans ITC", FontWeight.BOLD, 14));
                 nameLbl.setTextFill(getJavaFXColor(color));
+
                 Label ppLbl = new Label(pp + " PP");
                 ppLbl.setTextFill(Color.GOLD); ppLbl.setFont(Font.font("Tempus Sans ITC", FontWeight.BOLD, 12));
                 topRow.getChildren().addAll(nameLbl, ppLbl);
 
-                oppBox.getChildren().addAll(topRow, row1, row2, row3);
+                // Insert horizontal separators
+                oppBox.getChildren().addAll(
+                        topRow,
+                        createSeparator(false), row1,
+                        createSeparator(false), row2,
+                        createSeparator(false), row3,
+                        createSeparator(false), row4
+                );
 
                 if (opponentCount % 2 == 0) leftOpponentsBox.getChildren().add(oppBox);
                 else rightOpponentsBox.getChildren().add(oppBox);
@@ -252,6 +355,26 @@ public class GameBoardController {
             }
         }
     }
+
+    /**
+     * Creates a thin separator line for the player recap panels.
+     *
+     * @param isVertical True if the separator should be vertical, false for horizontal.
+     * @return A configured Separator node.
+     */
+    private javafx.scene.control.Separator createSeparator(boolean isVertical) {
+        javafx.scene.control.Separator sep = new javafx.scene.control.Separator();
+        sep.setOrientation(isVertical ? javafx.geometry.Orientation.VERTICAL : javafx.geometry.Orientation.HORIZONTAL);
+        sep.setOpacity(0.25);
+        return sep;
+    }
+
+    /**
+     * Renders a specific row of cards (Upper or Lower).
+     *
+     * @param rowBox The HBox container representing the row in the UI.
+     * @param rowData The CardRow data object containing current cards.
+     */
     private void updateCardRow(HBox rowBox, CardRow rowData) {
         if (rowBox == null) return;
         rowBox.getChildren().clear();
@@ -262,9 +385,19 @@ public class GameBoardController {
         for (BuildingCard b : rowData.getBuildingCards()) rowBox.getChildren().add(createCardNode(b, Color.web("#7E5109")));
     }
 
+    /**
+     * Creates a visual node for a single card.
+     * If the graphical asset is missing, it creates a colored rectangle with the Card ID as fallback.
+     *
+     * @param c The model Card object.
+     * @param defaultColor The fallback color used if the image is missing.
+     * @return A StackPane containing the visual representation of the card.
+     */
     private StackPane createCardNode(Card c, Color defaultColor) {
         StackPane pane = new StackPane();
         pane.setPrefSize(100, 140);
+
+        // Metadata required for interaction prompts
         pane.getProperties().put("cardId", c.getCardID());
         String typeStr = (c instanceof CharacterCard) ? "CHARACTER" : (c instanceof BuildingCard ? "BUILDING" : "EVENT");
         pane.getProperties().put("cardType", typeStr);
@@ -293,6 +426,11 @@ public class GameBoardController {
         return pane;
     }
 
+    /**
+     * Renders the Turn Order Tile and maps occupied slots to player totems.
+     *
+     * @param tile The TurnOrderTile model object.
+     */
     private void updateTurnOrderTile(TurnOrderTile tile) {
         if (turnOrderBox == null) return;
         turnOrderBox.getChildren().clear();
@@ -319,6 +457,7 @@ public class GameBoardController {
         totemsOverlay.setAlignment(Pos.CENTER);
         totemsOverlay.setPadding(new javafx.geometry.Insets(15, 0, 15, 0));
 
+        // Renders totems inside the defined slots
         for (int i = 0; i < numPlayers; i++) {
             TurnOrderSlot s = slots[i];
             StackPane slotContainer = new StackPane();
@@ -334,6 +473,11 @@ public class GameBoardController {
         turnOrderBox.getChildren().add(tilePane);
     }
 
+    /**
+     * Renders the Offering Track and places player totems on occupied tiles.
+     *
+     * @param track List of OfferingTiles representing the current track.
+     */
     private void updateOfferingTrack(List<OfferingTile> track) {
         if (offeringTrackBox == null) return;
         offeringTrackBox.getChildren().clear();
@@ -360,6 +504,12 @@ public class GameBoardController {
         }
     }
 
+    /**
+     * Activates the UI state allowing the local player to select an Offering Tile.
+     *
+     * @param trackSize The maximum index of tiles available for selection.
+     * @param future The CompletableFuture to complete with the chosen tile index.
+     */
     public void enableOfferingTileSelection(int trackSize, CompletableFuture<Integer> future) {
         this.isOfferingPromptActive = true;
         this.activeOfferingTrackSize = trackSize;
@@ -367,11 +517,14 @@ public class GameBoardController {
         applyOfferingTileSelectionVisuals();
     }
 
+    /**
+     * Applies glowing highlights and click listeners to selectable offering tiles.
+     */
     private void applyOfferingTileSelectionVisuals() {
         if (!isOfferingPromptActive || offeringTrackBox == null) return;
         if (phaseLabel != null) {
             phaseLabel.setText("IT'S YOUR TURN! Click an Offering Tile to place your totem.");
-            phaseLabel.setTextFill(Color.YELLOW);
+            phaseLabel.setTextFill(Color.web("#EFE4CB"));
         }
 
         List<javafx.scene.Node> tiles = offeringTrackBox.getChildren();
@@ -388,6 +541,14 @@ public class GameBoardController {
         }
     }
 
+    /**
+     * Activates the UI state allowing the local player to pick multiple cards from a specific row.
+     *
+     * @param rowName "UPPER" or "LOWER".
+     * @param targetType "CHARACTER", "BUILDING", or "EVENT".
+     * @param budget The maximum number of cards the player is allowed to pick.
+     * @param future The CompletableFuture to complete with the list of chosen card IDs.
+     */
     public void enableCardSelection(String rowName, String targetType, int budget, CompletableFuture<List<Integer>> future) {
         this.isCardPromptActive = true;
         this.activeCardRowName = rowName;
@@ -398,56 +559,93 @@ public class GameBoardController {
         applyCardSelectionVisuals();
     }
 
+    /**
+     * Renders card selection visuals, including dynamic "Skip" and "Confirm" buttons.
+     * Design Choice: To improve UX, the Confirm button is disabled until at least one card is picked.
+     * The Skip button explicitly allows bypassing the selection (e.g., saving budget for buildings).
+     */
     private void applyCardSelectionVisuals() {
         if (!isCardPromptActive) return;
         if (phaseLabel != null) {
-            phaseLabel.setText("YOUR TURN! Select " + activeCardTargetType + " from " + activeCardRowName + " ROW (Max " + activeCardBudget + " cards). Then click Confirm.");
-            phaseLabel.setTextFill(Color.YELLOW);
+            String hint = "CHARACTER".equals(activeCardTargetType) ?
+                    " (Click Skip to save picks for Buildings)." : " (Click Skip to pass).";
+            phaseLabel.setText("YOUR TURN! Select " + activeCardTargetType + " from " + activeCardRowName + " ROW (Max " + activeCardBudget + ")" + hint);
+            phaseLabel.setTextFill(Color.web("#EFE4CB"));
         }
 
         HBox targetBox = activeCardRowName.equals("UPPER") ? upperRowBox : lowerRowBox;
         if (targetBox == null) return;
 
         if (myStatusBox != null) {
-            myStatusBox.getChildren().removeIf(n -> "confirmSelectionBtn".equals(n.getId()));
+            // Remove previous instances of the buttons to avoid duplication
+            myStatusBox.getChildren().removeIf(n -> "actionButtonsBox".equals(n.getId()) || "confirmSelectionBtn".equals(n.getId()));
+
+            HBox actionButtonsBox = new HBox(15);
+            actionButtonsBox.setId("actionButtonsBox");
+            actionButtonsBox.setAlignment(Pos.CENTER);
+
+            // Skip Button: Immediately completes the future with an empty list
+            Button skipBtn = new Button("SKIP");
+            skipBtn.setStyle("-fx-background-color: #c0392b; -fx-text-fill: white; -fx-font-family: 'Tempus Sans ITC'; -fx-font-weight: bold; -fx-font-size: 14; -fx-cursor: hand;");
+            skipBtn.setOnAction(e -> {
+                CompletableFuture<List<Integer>> f = activeCardFuture;
+                disableSelectionStates();
+                if (f != null) f.complete(new ArrayList<>());
+            });
+
+            // Confirm Button: Disabled initially, enabled via updateButtonsState.run()
             Button confirmBtn = new Button("CONFIRM SELECTION");
-            confirmBtn.setId("confirmSelectionBtn");
-            confirmBtn.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white; -fx-font-weight: bold; -fx-font-size: 14; -fx-cursor: hand;");
+            confirmBtn.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white; -fx-font-family: 'Tempus Sans ITC'; -fx-font-weight: bold; -fx-font-size: 14; -fx-cursor: hand;");
+            confirmBtn.setDisable(true);
             confirmBtn.setOnAction(e -> {
                 List<Integer> result = new ArrayList<>(currentSelectedCardIds);
                 CompletableFuture<List<Integer>> f = activeCardFuture;
                 disableSelectionStates();
                 if (f != null) f.complete(result);
             });
-            myStatusBox.getChildren().add(confirmBtn);
-        }
 
-        for (javafx.scene.Node node : targetBox.getChildren()) {
-            if (activeCardTargetType.equals(node.getProperties().get("cardType"))) {
-                int cardId = (int) node.getProperties().get("cardId");
+            actionButtonsBox.getChildren().addAll(skipBtn, confirmBtn);
+            myStatusBox.getChildren().add(actionButtonsBox);
 
-                if (currentSelectedCardIds.contains(cardId)) {
-                    node.setStyle("-fx-cursor: hand; -fx-effect: dropshadow(three-pass-box, #00ff00, 20, 0, 0, 0);");
-                } else {
-                    node.setStyle("-fx-cursor: hand; -fx-effect: dropshadow(three-pass-box, rgba(255,255,255,0.5), 10, 0, 0, 0);");
-                }
+            // Helper lambda to toggle button state based on selection size
+            Runnable updateButtonsState = () -> {
+                confirmBtn.setDisable(currentSelectedCardIds.isEmpty());
+            };
 
-                node.setOnMouseClicked(e -> {
+            for (javafx.scene.Node node : targetBox.getChildren()) {
+                if (activeCardTargetType.equals(node.getProperties().get("cardType"))) {
+                    int cardId = (int) node.getProperties().get("cardId");
+
                     if (currentSelectedCardIds.contains(cardId)) {
-                        currentSelectedCardIds.remove((Integer) cardId);
-                        node.setStyle("-fx-cursor: hand; -fx-effect: dropshadow(three-pass-box, rgba(255,255,255,0.5), 10, 0, 0, 0);");
+                        node.setStyle("-fx-cursor: hand; -fx-effect: dropshadow(three-pass-box, #00ff00, 20, 0, 0, 0);");
                     } else {
-                        // Impedisce visivamente all'utente di selezionare più carte di quante ne possa pagare
-                        if (currentSelectedCardIds.size() < activeCardBudget) {
-                            currentSelectedCardIds.add(cardId);
-                            node.setStyle("-fx-cursor: hand; -fx-effect: dropshadow(three-pass-box, #00ff00, 20, 0, 0, 0);");
-                        }
+                        node.setStyle("-fx-cursor: hand; -fx-effect: dropshadow(three-pass-box, rgba(255,255,255,0.5), 10, 0, 0, 0);");
                     }
-                });
+
+                    node.setOnMouseClicked(e -> {
+                        if (currentSelectedCardIds.contains(cardId)) {
+                            currentSelectedCardIds.remove((Integer) cardId);
+                            node.setStyle("-fx-cursor: hand; -fx-effect: dropshadow(three-pass-box, rgba(255,255,255,0.5), 10, 0, 0, 0);");
+                        } else {
+                            // Enforce budget limits visually
+                            if (currentSelectedCardIds.size() < activeCardBudget) {
+                                currentSelectedCardIds.add(cardId);
+                                node.setStyle("-fx-cursor: hand; -fx-effect: dropshadow(three-pass-box, #00ff00, 20, 0, 0, 0);");
+                            }
+                        }
+                        updateButtonsState.run();
+                    });
+                }
             }
         }
     }
 
+    /**
+     * Activates the UI state allowing the local player to select a single extra card (e.g., from an event).
+     *
+     * @param targetType The card type allowed for selection.
+     * @param future The CompletableFuture to complete with the single chosen card ID.
+     */
     public void enableSingleCardSelection(String targetType, CompletableFuture<Integer> future) {
         this.isSingleCardPromptActive = true;
         this.activeSingleCardTargetType = targetType;
@@ -455,11 +653,14 @@ public class GameBoardController {
         applySingleCardSelectionVisuals();
     }
 
+    /**
+     * Applies interaction listeners for a single card pick scenario, bypassing the confirm button.
+     */
     private void applySingleCardSelectionVisuals() {
         if (!isSingleCardPromptActive) return;
         if (phaseLabel != null) {
             phaseLabel.setText("SELECT YOUR EXTRA CARD: Click on the card you want to pick.");
-            phaseLabel.setTextFill(Color.YELLOW);
+            phaseLabel.setTextFill(Color.web("#EFE4CB"));
         }
 
         for (HBox row : new HBox[]{upperRowBox, lowerRowBox}) {
@@ -478,6 +679,10 @@ public class GameBoardController {
         }
     }
 
+    /**
+     * Clears all active interaction states, removes glow effects, and hides action buttons.
+     * Called automatically after a user fulfills an interaction prompt.
+     */
     private void disableSelectionStates() {
         isOfferingPromptActive = false;
         isCardPromptActive = false;
@@ -485,15 +690,21 @@ public class GameBoardController {
 
         if (phaseLabel != null) {
             phaseLabel.setText("Waiting for other players...");
-            phaseLabel.setTextFill(Color.web("#00ff4d"));
+            phaseLabel.setTextFill(Color.web("#EFE4CB"));
         }
-        if (myStatusBox != null) myStatusBox.getChildren().removeIf(n -> "confirmSelectionBtn".equals(n.getId()));
+
+        if (myStatusBox != null) {
+            myStatusBox.getChildren().removeIf(n ->
+                    "actionButtonsBox".equals(n.getId()) || "confirmSelectionBtn".equals(n.getId())
+            );
+        }
 
         if (offeringTrackBox != null) {
             for (javafx.scene.Node node : offeringTrackBox.getChildren()) {
                 node.setStyle(""); node.setOnMouseClicked(null);
             }
         }
+
         for (HBox row : new HBox[]{upperRowBox, lowerRowBox}) {
             if (row != null) {
                 for (javafx.scene.Node node : row.getChildren()) {
@@ -503,6 +714,12 @@ public class GameBoardController {
         }
     }
 
+    /**
+     * Retrieves the graphical asset for a specific Totem Color.
+     *
+     * @param color The TotemColor enum value.
+     * @return The ImageView containing the totem image, or null if loading fails.
+     */
     private ImageView getTotemImageView(TotemColor color) {
         if (color == null) return null;
         try {
@@ -513,6 +730,12 @@ public class GameBoardController {
         } catch (Exception e) { return null; }
     }
 
+    /**
+     * Translates a game model TotemColor into a JavaFX paint Color for UI styling.
+     *
+     * @param color The TotemColor to translate.
+     * @return The corresponding JavaFX Color.
+     */
     private Color getJavaFXColor(TotemColor color) {
         if (color == null) return Color.WHITE;
         return switch (color) {
@@ -522,17 +745,26 @@ public class GameBoardController {
         };
     }
 
+    /**
+     * Utility method to format a JavaFX Color to its Hexadecimal String representation.
+     */
     private String toHexString(Color color) {
         return String.format("#%02X%02X%02X", (int)(color.getRed()*255), (int)(color.getGreen()*255), (int)(color.getBlue()*255));
     }
+
     /**
-     * Crea un piccolo contenitore HBox con un'icona e un numero di fianco.
+     * Creates a standardized UI element pairing a graphical icon with a numerical value.
+     * Falls back to text-only rendering if the icon image file is not found.
+     *
+     * @param iconName The filename of the icon (must reside in /images/icons/).
+     * @param value The numerical statistic to display.
+     * @param iconSize The squared size constraint for the icon.
+     * @return An HBox containing the formatted icon and text.
      */
     private HBox createIconStat(String iconName, int value, int iconSize) {
         HBox box = new HBox(5);
         box.setAlignment(Pos.CENTER_LEFT);
         try {
-            // Assicurati che il path corrisponda alla cartella dove hai salvato le tue icone!
             String imagePath = "/images/icons/" + iconName;
             Image img = new Image(getClass().getResourceAsStream(imagePath));
             if (img.isError()) throw new Exception("Image not found");
@@ -548,7 +780,6 @@ public class GameBoardController {
 
             box.getChildren().addAll(icon, lbl);
         } catch (Exception e) {
-            // Fallback: Se l'icona manca o il nome è sbagliato, stampa solo il testo come backup.
             String cleanName = iconName.split("\\.")[0].toUpperCase();
             Label lbl = new Label(cleanName + ": " + value);
             lbl.setTextFill(Color.WHITE);

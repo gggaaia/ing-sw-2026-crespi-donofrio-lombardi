@@ -16,6 +16,7 @@ import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -355,38 +356,50 @@ public class GuiView implements View {
 
     @Override
     public List<Integer> promptCharacterUpperIds(int budget) {
+        // SE IL BUDGET E' ZERO, SALTA COMPLETAMENTE LA GUI E RITORNA UNA LISTA VUOTA
+        if (budget <= 0) return new ArrayList<>();
+
         CompletableFuture<List<Integer>> future = new CompletableFuture<>();
         Platform.runLater(() -> {
             if (boardController != null) boardController.enableCardSelection("UPPER", "CHARACTER", budget, future);
         });
-        try { return future.get(); } catch (Exception e) { return List.of(); }
+        try { return future.get(); } catch (Exception e) { return new ArrayList<>(); }
     }
 
     @Override
     public List<Integer> promptCharacterLowerIds(int budget) {
+        // SE IL BUDGET E' ZERO, SALTA COMPLETAMENTE LA GUI E RITORNA UNA LISTA VUOTA
+        if (budget <= 0) return new ArrayList<>();
+
         CompletableFuture<List<Integer>> future = new CompletableFuture<>();
         Platform.runLater(() -> {
             if (boardController != null) boardController.enableCardSelection("LOWER", "CHARACTER", budget, future);
         });
-        try { return future.get(); } catch (Exception e) { return List.of(); }
+        try { return future.get(); } catch (Exception e) { return new ArrayList<>(); }
     }
 
     @Override
     public List<Integer> promptBuildingUpperIds(int remaining) {
+        // SE NON PUOI PRENDERE EDIFICI, SALTA COMPLETAMENTE LA GUI E RITORNA UNA LISTA VUOTA
+        if (remaining <= 0) return new ArrayList<>();
+
         CompletableFuture<List<Integer>> future = new CompletableFuture<>();
         Platform.runLater(() -> {
             if (boardController != null) boardController.enableCardSelection("UPPER", "BUILDING", remaining, future);
         });
-        try { return future.get(); } catch (Exception e) { return List.of(); }
+        try { return future.get(); } catch (Exception e) { return new ArrayList<>(); }
     }
 
     @Override
     public List<Integer> promptBuildingLowerIds(int remaining) {
+        // SE NON PUOI PRENDERE EDIFICI, SALTA COMPLETAMENTE LA GUI E RITORNA UNA LISTA VUOTA
+        if (remaining <= 0) return new ArrayList<>();
+
         CompletableFuture<List<Integer>> future = new CompletableFuture<>();
         Platform.runLater(() -> {
             if (boardController != null) boardController.enableCardSelection("LOWER", "BUILDING", remaining, future);
         });
-        try { return future.get(); } catch (Exception e) { return List.of(); }
+        try { return future.get(); } catch (Exception e) { return new ArrayList<>(); }
     }
 
     @Override
