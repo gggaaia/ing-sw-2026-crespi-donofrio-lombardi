@@ -112,6 +112,14 @@ public class TuiView implements View {
         if (state.getFinalLeaderboard() != null) {
             sb.append("leaderboard: ").append(state.getFinalLeaderboard()).append(nl);
             sb.append("winners:     ").append(state.getFinalWinners()).append(nl);
+
+            Map<String, Integer> global = state.getGlobalLeaderboard();
+            if (global != null && !global.isEmpty()) {
+                String myName = state.getMyNickname();
+                int playerCount = state.getJoinedPlayers().size();
+
+                sb.append(TuiPrinter.formatGlobalLeaderboard(global, myName, playerCount)).append(nl);
+            }
         }
         sb.append(TuiPrinter.BLUE).append(LONG_SEP).append(TuiPrinter.RESET);
         // NB: pendingError is NOT printed here. That's handled by
@@ -303,7 +311,7 @@ public class TuiView implements View {
      * current occupant). The boxed formatters live in
      * {@link TuiPrinter}; here we just decide the order of the blocks.
      */
-    private void appendBoardOverview(StringBuilder sb, Board board, String nl) {
+    private void    appendBoardOverview(StringBuilder sb, Board board, String nl) {
         TurnOrderTile tot = board.getTurnOrderTile();
         if (tot != null) {
             sb.append(TuiPrinter.BLUE).append("--- BOARD ---").append(TuiPrinter.RESET).append(nl);

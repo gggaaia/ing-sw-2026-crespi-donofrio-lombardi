@@ -99,3 +99,6 @@ ehthumbs.db
 Thumbs.db
 
 ARCHITECTURE.md
+
+# Local database configuration (Supabase)
+config.properties

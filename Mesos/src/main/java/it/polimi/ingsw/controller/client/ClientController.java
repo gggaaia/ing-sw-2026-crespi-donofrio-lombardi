@@ -66,6 +66,7 @@ public class ClientController {
     private int expectedPlayers;
     private List<String> finalLeaderboard;
     private List<String> finalWinners;
+    private Map<String, Integer> globalLeaderboard;
     /**
      * Server-side error (e.g. "tile already occupied") waiting to be
      * shown. We just stash it in {@link #actionRejected} without
@@ -194,6 +195,7 @@ public class ClientController {
     public synchronized int getExpectedPlayers()                      { return expectedPlayers; }
     public synchronized List<String> getFinalLeaderboard()            { return finalLeaderboard == null ? null : new ArrayList<>(finalLeaderboard); }
     public synchronized List<String> getFinalWinners()                { return finalWinners == null ? null : new ArrayList<>(finalWinners); }
+    public synchronized Map<String, Integer> getGlobalLeaderboard()        { return new HashMap<>(globalLeaderboard); }
 
     // ====================================================================
     // Event handlers (called by Rmi_Client / Socket_Client).
@@ -448,10 +450,11 @@ public class ClientController {
         pendingLogs.add("Round ended");
     }
 
-    public synchronized void gameEnded(List<String> leaderboard, List<String> winners) {
+    public synchronized void gameEnded(List<String> leaderboard, List<String> winners, Map<String, Integer> globalLeaderboard) {
         this.currentPhase = Phase.GAME_ENDED;
         this.finalLeaderboard = leaderboard;
         this.finalWinners = winners;
+        this.globalLeaderboard = globalLeaderboard;
         pendingLogs.add("Game ended. Winners: " + winners);
         pendingGameEnded = true;
         // NB: the latch countDown is moved to commit(), so the main

@@ -15,6 +15,7 @@ import java.rmi.NoSuchObjectException;
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -171,8 +172,8 @@ public class Rmi_Client implements VirtualView {
         controller.roundEnded();
     }
 
-    @Override public void onGameEnded(List<String> leaderboard, List<String> winners) throws RemoteException {
-        controller.gameEnded(leaderboard, winners);
+    @Override public void onGameEnded(List<String> leaderboard, List<String> winners, Map<String, Integer> globalLeaderboard) throws RemoteException {
+        controller.gameEnded(leaderboard, winners, globalLeaderboard);
     }
 
     @Override public void onMatchPaused(String reason) throws RemoteException {

@@ -2,7 +2,9 @@ package it.polimi.ingsw.controller.server;
 
 import it.polimi.ingsw.Server;
 import it.polimi.ingsw.common.VirtualView;
+import it.polimi.ingsw.common.dto.FinalStats;
 import it.polimi.ingsw.common.dto.GameSnapshot;
+import it.polimi.ingsw.database.DatabaseManager;
 import it.polimi.ingsw.exceptions.DeckLoadException;
 import it.polimi.ingsw.exceptions.EmptyDeckException;
 import it.polimi.ingsw.model.Board;
@@ -19,18 +21,7 @@ import it.polimi.ingsw.model.enums.Era;
 import it.polimi.ingsw.model.enums.TotemColor;
 
 import java.rmi.RemoteException;
-import java.util.ArrayList;
-import java.util.EnumSet;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.Queue;
-import java.util.Set;
-import java.util.Timer;
-import java.util.TimerTask;
+import java.util.*;
 
 /**
  * Server-side controller. Holds the game state and handles phase
@@ -1106,7 +1097,16 @@ public class ServerController {
     // --- end of match ---------------------------------------------------
 
 
+    /**
+     * Handles the end-of-game routine by resolving final board states, events, and scores.
+     * <p>
+     * This method finalizes the board row transitions, triggers end-game events and point
+     * calculations, determines the official winners (handling forced victories if applicable),
+     * updates the server's phase to game-over, and broadcasts the final leaderboard
+     * and winners list to all connected clients.
+     */
     private void endGame() {
+        Map<String, Integer> finalGlobalLeaderboard = new LinkedHashMap<>();
         if (match != null) {
             match.getBoard().shiftUpToLow();
             match.resolveEvents();
@@ -1119,20 +1119,74 @@ public class ServerController {
             finalWinners = (forcedWinners != null && !forcedWinners.isEmpty())
                     ? new ArrayList<>(forcedWinners)
                     : computeWinners(sorted);
+
+            finalGlobalLeaderboard = processDatabasePersistence();
         }
         currentPlayerNickname = null;
         phase = new PhaseLogic.GameEnded();
+
         final List<String> leaderboard = finalLeaderboard != null
                 ? new ArrayList<>(finalLeaderboard) : new ArrayList<String>();
         final List<String> winners = finalWinners != null
                 ? new ArrayList<>(finalWinners) : new ArrayList<String>();
+        final Map<String, Integer> globalLeaderboard = finalGlobalLeaderboard != null
+                ? new LinkedHashMap<>(finalGlobalLeaderboard) : new LinkedHashMap<>();
+
         broadcastAndCommit(new ViewCall() {
             @Override public void apply(VirtualView v) throws RemoteException {
-                v.onGameEnded(leaderboard, winners);
+                v.onGameEnded(leaderboard, winners, globalLeaderboard);
             }
         });
     }
 
+    /**
+     * Creates a {@link FinalStats} DTO populated with the current match data and player scores.
+     * Used for DB communications.
+     *
+     * @return a new instance containing the final match statistics
+     */
+    private FinalStats makeFinalStats() {
+        int matchId=match.getMatchID();
+        Date date=match.getDate();
+        int numPlayer=(match.getPlayersList().size());
+        Map<String, Integer> mapPoints = new HashMap<>();
+        for (Player p : match.getPlayersList()) {
+            mapPoints.put(p.getNickname(), p.getPrestigePoints());
+        }
+        return new FinalStats( matchId, date, numPlayer, mapPoints );
+    }
+
+    /**
+     * Synchronously persists the final match statistics to the database and
+     * retrieves the updated global leaderboard for the current player count category.
+     *
+     * @return the updated global leaderboard, or an empty map if a database error occurs
+     */
+    private Map<String, Integer> processDatabasePersistence() {
+        try {
+            FinalStats stats = makeFinalStats();
+            DatabaseManager.getInstance().saveMatch(stats);
+            return DatabaseManager.getInstance().getLeaderboard(stats.getNumPlayers());
+
+        } catch (Exception e) {
+            System.err.println("[SERVER DB ERROR] Critical failure during persistence routine: " + e.getMessage());
+
+            // on error return an empty map to ensure the broadcast doesn't fail
+            return new LinkedHashMap<>();
+        }
+    }
+
+    /**
+     * Computes the list of winners from a pre-sorted list of players.
+     * <p>
+     * Since the input list is already sorted by the main game criteria, this method
+     * identifies the top player and includes any subsequent players who share the exact
+     * same maximum prestige points and food score (handling ties).
+     * </p>
+     *
+     * @param sorted the list of players, pre-sorted in descending order of performance
+     * @return a list of nicknames of the winning player(s)
+     */
     private List<String> computeWinners(List<Player> sorted) {
         List<String> winners = new ArrayList<>();
         if (sorted.isEmpty()) return winners;
@@ -1405,7 +1459,15 @@ public class ServerController {
         }
     }
 
+    /**
+     * Handles the premature end of the game when a timeout expires and only one player remains.
+     * <p>
+     * Verifies the pause state and connection counts, declares the lone remaining player
+     * as the forced winner, finalizes the match state within the game manager, and broadcasts
+     * the final match results along with the global database leaderboard to the clients.
+     */
     private void handleLonePlayerTimeout() {
+        Map<String, Integer> finalGlobalLeaderboard = new LinkedHashMap<>();
         String winnerNick;
         synchronized (this) {
             if (!phase.isPaused()) return;
@@ -1429,11 +1491,16 @@ public class ServerController {
             currentPlayerNickname = null;
             phase = new PhaseLogic.GameEnded();
         }
+
+        finalGlobalLeaderboard = processDatabasePersistence();
+        final Map<String, Integer> globalLeaderboard = finalGlobalLeaderboard != null
+                ? new LinkedHashMap<>(finalGlobalLeaderboard) : new LinkedHashMap<>();
+
         final List<String> lb = new ArrayList<>(finalLeaderboard);
         final List<String> wn = new ArrayList<>(finalWinners);
         broadcastAndCommit(new ViewCall() {
             @Override public void apply(VirtualView v) throws RemoteException {
-                v.onGameEnded(lb, wn);
+                v.onGameEnded(lb, wn, globalLeaderboard);
             }
         });
     }

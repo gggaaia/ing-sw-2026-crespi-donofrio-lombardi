@@ -14,6 +14,7 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -198,7 +199,7 @@ public class TuiPrinter {
     }
 
     /**
-     * Genera la rappresentazione grafica affiancata delle carte contenute in una CardRow.
+     * generates a side-by-side graphic representation of the cards contained in a CardRow.
      */
     public static String formatCardRow(CardRow row) {
         if (row == null) return "";
@@ -280,7 +281,7 @@ public class TuiPrinter {
     }
 
     /**
-     * Crea i bordi usando '-' e '|' attorno alle informazioni verticali di una singola carta.
+     * Creates borders using '-' and '|' around the vertical information of a single card.
      */
     private static List<String> renderSingleCard(List<String> infoLines) {
         int maxTextLength = 0;
@@ -307,7 +308,7 @@ public class TuiPrinter {
     }
 
     /**
-     * Unisce orizzontalmente le righe dei vari blocchi di carte inserendo uno spazio.
+     * Joins the rows of the various blocks of paper horizontally by inserting a space.
      */
     private static String sideBySideBlocks(List<List<String>> blocks) {
         if (blocks.isEmpty()) return "";
@@ -344,5 +345,57 @@ public class TuiPrinter {
         return sb.toString();
     }
 
+    /**
+     * Formats the global leaderboard into an ANSI-colored text block for the TUI,
+     * highlighting the current player's rank and appending a summary box.
+     *
+     * @param globalLeaderboard sorted map of player nicknames and their scores.
+     * @param myNickname        the nickname of the current player to highlight.
+     * @param numPlayers        the match size category (e.g., 2, 3, or 4 players).
+     * @return a formatted string representing the leaderboard view.
+     */
+    public static String formatGlobalLeaderboard(Map<String, Integer> globalLeaderboard, String myNickname, int numPlayers) {
+        StringBuilder sb = new StringBuilder();
+        String nl = System.lineSeparator();
+
+        sb.append(nl).append(BLUE)
+                .append("=== GLOBAL LEADERBOARD FOR ").append(numPlayers).append("PLAYERS MATCHES ===")
+                .append(RESET).append(nl);
+
+        int rank = 1;
+        int myRank = -1;
+
+        for (Map.Entry<String, Integer> entry : globalLeaderboard.entrySet()) {
+            String player = entry.getKey();
+            int score = entry.getValue();
+
+            if (player.equals(myNickname)) {
+                myRank = rank;
+                sb.append(TuiPrinter.GREEN)
+                        .append(String.format("  %d. %-15s (YOU) ➔ %d points", rank, player, score))
+                        .append(TuiPrinter.RESET).append(nl);
+            } else {
+                sb.append(String.format("  %d. %-15s ➔ %d points", rank, player, score)).append(nl);
+            }
+            rank++;
+        }
+
+        sb.append(BLUE).append("====================================================").append(RESET).append(nl);
+
+        if (myRank != -1) {
+            String message = String.format("You are the %d° best player in this category!", myRank);
+
+            int boxWidth = message.length() + 6;
+            String border = "+" + "-".repeat(boxWidth - 2) + "+";
+
+            sb.append(TuiPrinter.GREEN);
+            sb.append(border).append(nl);
+            sb.append("|  ").append(message).append("  |").append(nl);
+            sb.append(border).append(nl);
+            sb.append(TuiPrinter.RESET).append(nl);
+        }
+
+        return sb.toString();
+    }
 
 }
