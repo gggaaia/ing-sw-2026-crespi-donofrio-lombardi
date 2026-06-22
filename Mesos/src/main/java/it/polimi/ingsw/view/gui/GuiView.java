@@ -16,15 +16,13 @@ import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Main Gui implementation of the View.
+ * Main Graphical User Interface (GUI) implementation of the View.
  * This class acts as the bridge between the client's network/logic controllers
- * and JavaFX. It implements the {@link View} interface to handle asynchronous
+ * and the JavaFX UI. It implements the {@link View} interface to handle asynchronous
  * prompts, popups, scene changes, and UI refreshes based on the game state.
  */
 public class GuiView implements View {
@@ -49,6 +47,8 @@ public class GuiView implements View {
     private TotemSelectionController totemController;
     private boolean isGameBoardLoaded = false;
     private GameBoardController boardController;
+    private GameOverController gameOverController;
+    private LeaderboardController leaderboardController;
 
     /**
      * Constructor for GuiView.
@@ -85,7 +85,6 @@ public class GuiView implements View {
      * Manages popups based on whether the user is reconnecting or starting a fresh game.
      */
     public void notifyStartClickedInstance() {
-        // Reset the abort switch: when starting a new game, the UI must be fully visible
         isAborting = false;
 
         if (isReconnecting) {
@@ -210,14 +209,31 @@ public class GuiView implements View {
             clientController = state;
             Phase currentPhase = state.getCurrentPhase();
 
-            // Open the lobby ONLY if we are not currently aborting the game
-            if (currentPhase == Phase.WAITING_FOR_PLAYERS && !isAborting) {
+            // Close the Nickname popup as soon as the server accepts us and updates the phase
+            if (currentPopupStage != null && currentPopupStage.isShowing() && "Enter Nickname".equals(currentPopupStage.getTitle())) {
+                if (currentPhase != null && currentPhase != Phase.WAITING_FOR_NICKNAME) {
+                    currentPopupStage.close();
+                    nicknameController = null;
+                }
+            }
+
+            boolean isPreGame = (currentPhase == null ||
+                    currentPhase == Phase.WAITING_FOR_NICKNAME ||
+                    currentPhase == Phase.WAITING_FOR_PLAYER_COUNT ||
+                    currentPhase == Phase.WAITING_FOR_PLAYERS);
+
+            // We ONLY show the color picking popup if the server explicitly tells us we are in that phase.
+            boolean isColorPicking = (currentPhase == Phase.COLOR_PICKING);
+
+            // Keep the Lobby open even during COLOR_PICKING as a background
+            if ((currentPhase == Phase.WAITING_FOR_PLAYERS || isColorPicking) && !isAborting) {
                 handleLobbyPhase(state);
             } else {
                 closeLobbyIfOpen();
             }
 
-            if (currentPhase == Phase.COLOR_PICKING) {
+            // Handle Totem Selection Popup
+            if (isColorPicking) {
                 if (currentPopupStage != null && currentPopupStage.isShowing() && totemController == null) {
                     currentPopupStage.close();
                 }
@@ -226,12 +242,19 @@ public class GuiView implements View {
                 closeTotemPopupIfOpen();
             }
 
-            boolean isGameStarted = (currentPhase != Phase.WAITING_FOR_NICKNAME &&
-                    currentPhase != Phase.WAITING_FOR_PLAYER_COUNT &&
-                    currentPhase != Phase.WAITING_FOR_PLAYERS &&
-                    currentPhase != Phase.COLOR_PICKING);
+            boolean isGameStarted = !isPreGame && !isColorPicking && currentPhase != Phase.GAME_ENDED;
 
-            if (isGameStarted) {
+            // Handle Game Ended Phase
+            if (currentPhase == Phase.GAME_ENDED) {
+                if (currentPopupStage != null && currentPopupStage.isShowing()) {
+                    currentPopupStage.close();
+                    currentPopupStage = null;
+                }
+                // Calls end game stage
+                showMatchGameOverScreen(state);
+            }
+            // If the game is started and NOT ended, show the normal Game Board
+            else if (isGameStarted) {
                 if (currentPopupStage != null && currentPopupStage.isShowing()) {
                     currentPopupStage.close();
                     currentPopupStage = null;
@@ -335,7 +358,11 @@ public class GuiView implements View {
 
             String myName = state.getMyNickname() != null ? state.getMyNickname() : "";
             String currentPlayer = state.getCurrentPlayer() != null ? state.getCurrentPlayer() : "";
-            totemController.updateState(currentPlayer, myName, state.getAvailableColors(), new CompletableFuture<>());
+
+            Set<TotemColor> available = state.getAvailableColors();
+            if (available == null) available = new HashSet<>();
+
+            totemController.updateState(currentPlayer, myName, available, new CompletableFuture<>());
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -356,6 +383,9 @@ public class GuiView implements View {
     public TotemColor promptColor(Set<TotemColor> available) {
         CompletableFuture<TotemColor> colorFuture = new CompletableFuture<>();
         Platform.runLater(() -> {
+            if (totemController == null && clientController != null) {
+                showTotemPopup(clientController);
+            }
             if (totemController != null && clientController != null) {
                 totemController.updateState(clientController.getCurrentPlayer(), clientController.getMyNickname(), available, colorFuture);
             }
@@ -391,7 +421,6 @@ public class GuiView implements View {
             Platform.runLater(() -> { if (currentPopupStage != null) currentPopupStage.close(); });
             return count;
         } catch (Exception e) {
-
             return 2;
         }
     }
@@ -427,10 +456,10 @@ public class GuiView implements View {
     }
 
     /**
-     * Instance method to handle a clean exit from the lobby and return the user to the Welcome screen.
+     * Instance method to handle a clean exit from the lobby
+     * and return the user to the Welcome screen.
      */
     public void abortLobbyAndDisconnectInstance() {
-        // Block the lobby UI before sending the disconnect request to avoid visual glitches
         isAborting = true;
 
         if (clientController != null) clientController.leaveLobbySoft();
@@ -552,4 +581,73 @@ public class GuiView implements View {
             return new View.ExtraPickChoice();
         }
     }
-}
+
+    // =========================================================================================
+    // END OF GAME SCREEN MANAGEMENT METHODS
+    // =========================================================================================
+
+    /**
+     * Displays the match results on the main stage once the game has concluded.
+     */
+    private void showMatchGameOverScreen(ClientController state) {
+
+        try {
+            FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/game_over.fxml"));
+            Parent root = loader.load();
+            gameOverController = loader.getController();
+
+            mainStage.setScene(new Scene(root));
+            mainStage.centerOnScreen();
+
+            isGameBoardLoaded = false;
+            if (gameOverController != null) {
+                gameOverController.updateMatchResults(state);
+            }
+        } catch (Exception e) {
+            System.err.println("GRAPHIC ERROR: Loading failed for 'game_over.fxml'.");
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * Static method allowing the GameOverController to trigger the scene change.
+     */
+    public static void showGlobalLeaderboardScreen() {
+        if (instance != null) {
+            instance.showGlobalLeaderboardScreenInstance();
+        }
+    }
+
+    /**
+     * Loads the global database history by swapping the scene on the mainStage.
+     */
+    private void showGlobalLeaderboardScreenInstance() {
+        Platform.runLater(() -> {
+            try {
+                // 1. LOAD THE FXML AND INITIALIZE THE SCENE
+                FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/game_leaderboard.fxml"));
+                Parent root = loader.load();
+
+                // Now that the page is fully loaded, the controller is successfully instantiated
+                leaderboardController = loader.getController();
+
+                mainStage.setScene(new Scene(root));
+                mainStage.centerOnScreen();
+
+                // 2. PASS THE DATA
+                if (clientController != null && leaderboardController != null) {
+                    Map<String, Integer> globalStats = clientController.getGlobalLeaderboard();
+                    String myName = clientController.getMyNickname();
+                    int expectedCount = clientController.getExpectedPlayers();
+
+                    leaderboardController.updateGlobalLeaderboard(globalStats, myName, expectedCount);
+                } else {
+                    System.err.println("ERROR: Null controller, unable to pass data to the leaderboard.");
+                }
+
+            } catch (Exception e) {
+                System.err.println("GRAPHIC ERROR: Fatal failure while loading 'game_leaderboard.fxml'.");
+                e.printStackTrace();
+            }
+        });
+    }}

@@ -225,14 +225,20 @@ public class ClientController {
     public synchronized List<String> getFinalLeaderboard()            { return finalLeaderboard == null ? null : new ArrayList<>(finalLeaderboard); }
     /** @return A copy of the final winners list, or null if the game hasn't ended. */
     public synchronized List<String> getFinalWinners()                { return finalWinners == null ? null : new ArrayList<>(finalWinners); }
+
     /**
      * Returns a copy of the global leaderboard.
      * Uses a {@link LinkedHashMap} to preserve the ranking order.
      *
      * @return an ordered copy of the leaderboard map.
      */
-    public synchronized Map<String, Integer> getGlobalLeaderboard()        { return new LinkedHashMap<>(globalLeaderboard); }
-
+    public synchronized Map<String, Integer> getGlobalLeaderboard() {
+        //avoids NullPointerException!
+        if (globalLeaderboard == null) {
+            return new LinkedHashMap<>();
+        }
+        return new LinkedHashMap<>(globalLeaderboard);
+    }
     // ====================================================================
     // Event handlers (called by Rmi_Client / Socket_Client).
     //

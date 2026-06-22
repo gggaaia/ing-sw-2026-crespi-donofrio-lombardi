@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.image.Image?>
+<?import javafx.scene.image.ImageView?>
+<?import javafx.scene.layout.AnchorPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.text.Font?>
+
+<AnchorPane prefHeight="720.0" prefWidth="1280.0" xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1" fx:controller="it.polimi.ingsw.view.gui.GameOverController">
+   <children>
+      <ImageView fitHeight="720.0" fitWidth="1280.0" pickOnBounds="true">
+         <image>
+            <Image url="@../images/leaderboard_bg.jpeg" />
+         </image>
+      </ImageView>
+
+      <VBox alignment="CENTER" prefHeight="720.0" prefWidth="1280.0" AnchorPane.bottomAnchor="0.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" AnchorPane.topAnchor="0.0">
+         <children>
+            <VBox alignment="CENTER" maxHeight="-Infinity" maxWidth="550.0" spacing="30.0" style="-fx-background-color: rgba(0, 0, 0, 0.7); -fx-background-radius: 20; -fx-padding: 30;">
+               <children>
+
+                  <Label fx:id="winnerLabel" text="Match Over" textFill="#EFE4CB">
+                     <font>
+                        <Font name="Tempus Sans ITC" size="36.0" />
+                     </font>
+                  </Label>
+
+                  <VBox fx:id="matchLeaderboardBox" alignment="TOP_CENTER" spacing="15.0" />
+
+                  <HBox alignment="CENTER" spacing="20.0">
+                     <children>
+                        <Button fx:id="backToWelcomeBtn" mnemonicParsing="false" prefHeight="45.0" prefWidth="150.0" text="Back to Main" />
+                        <Button fx:id="viewGlobalBtn" mnemonicParsing="false" prefHeight="45.0" prefWidth="180.0" text="Global Leaderboard" />
+                        <Button fx:id="exitGameBtn" mnemonicParsing="false" prefHeight="45.0" prefWidth="150.0" text="Exit Game" />
+                     </children>
+                  </HBox>
+
+               </children>
+            </VBox>
+         </children>
+      </VBox>
+   </children>
+</AnchorPane>
