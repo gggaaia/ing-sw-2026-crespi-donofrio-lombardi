@@ -46,11 +46,16 @@ public abstract class PhaseLogic {
     // === default: every action is rejected ===
 
     public void onConnect(ServerController c, String nick, VirtualView view) {
-        // Rejections during a connect attempt go through
-        // onNicknameRejected: the client shows the error and kicks
-        // off a re-prompt so the user can try again (same or
-        // different nickname).
-        c.rejectNickname(nick, view, "cannot join right now");
+        // If someone connects while the game is already running, the
+        // only ok case is a player who was in the game and is coming
+        // back. So if this nickname is one of the players, let them
+        // reconnect. If not, it is a stranger, so we tell them they
+        // cannot join (the client shows the error and asks again).
+        if (c.isActiveMatchMember(nick)) {
+            c.acceptReconnect(nick, view);
+        } else {
+            c.rejectNickname(nick, view, "cannot join right now");
+        }
     }
 
     public void onDisconnect(ServerController c, String nick) {

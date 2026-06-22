@@ -55,17 +55,14 @@ public class Socket_ClientHandler implements ClientToServerMessage.Visitor {
 
     @Override
     public void visitConnect(String nickname) {
-        // Phase check FIRST: if the controller isn't accepting new
-        // connections (e.g. WAITING_FOR_PLAYER_COUNT, a running match,
-        // GAME_ENDED), drop the attempt with the standard "no game"
-        // error WITHOUT touching the registry. This matters when the
-        // new client picks a nickname that happens to collide with an
-        // existing one: skipping the registry check here avoids
-        // confusing the user with a misleading "nickname already in
-        // use" AND, more importantly, prevents the duplicate from
-        // later sending disconnect(nickname) and kicking the
-        // legitimate holder out.
-        if (!server.getController().isAcceptingNewConnections()) {
+        // Let the player in only if the game is taking new players, or
+        // if this is a player coming back to a game that is already
+        // running (canReconnect). If neither is true, tell them there
+        // is no game to join and stop here, without registering them.
+        // We do not register a name that is already taken, so a second
+        // person with the same name can't kick out the real player.
+        if (!server.getController().isAcceptingNewConnections()
+                && !server.getController().canReconnect(nickname)) {
             try {
                 virtualView.onNicknameRejected("no game currently accepting players");
             } catch (RemoteException ignored) {

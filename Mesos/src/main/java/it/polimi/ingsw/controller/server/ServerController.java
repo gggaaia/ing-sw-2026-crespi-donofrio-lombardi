@@ -130,6 +130,33 @@ public class ServerController {
         return phase.acceptsNewConnections();
     }
 
+    /**
+     * Returns true if this nickname is a player who is already in the
+     * game but is offline right now, so they are allowed to join back.
+     *
+     * Need this because when 2 or more players are still online the
+     * game does not pause. Without this check the player who left would
+     * get "no game currently accepting players" and could never return.
+     *
+     * It also checks if the player is not connected at the moment, so
+     * nobody can take a nickname that someone else is still using.
+     */
+    public synchronized boolean canReconnect(String nick) {
+        return isActiveMatchMember(nick) && !server.isConnected(nick);
+    }
+
+    /**
+     * Returns true if there is a game going on (not finished yet) and
+     * this nickname is one of the players in it.
+     *
+     * Used to know if a new connection is a player coming back
+     * (let them reconnect) or just a stranger trying to join a game
+     * that already started (we say no to them).
+     */
+    boolean isActiveMatchMember(String nick) {
+        return match != null && !phase.isFinished() && joinedNicknames.contains(nick);
+    }
+
     public synchronized void disconnect(String nick) {
         phase.onDisconnect(this, nick);
     }
@@ -1281,38 +1308,53 @@ public class ServerController {
         });
     }
 
-    /** Accepted in {@link PhaseLogic.PausedWaitingReconnect}. */
+    /**
+     * Lets a player who left join back into the game. This is used both
+     * when the game is paused (everyone else left too) and when the
+     * game is still going on with the other players.
+     */
     void acceptReconnect(final String nick, VirtualView view) {
-        // Reconnect: the nickname has to be a known one.
+        // Only let them in if this nickname is really one of the players.
+        // If the name is wrong send a "nickname" error, not an action
+        // error. A nickname error makes the client show the message and
+        // ask for the name again, so the user can just try once more. An
+        // action error here would leave the client stuck with no prompt
+        // (during a pause there is no turn to send back), which is why
+        // the client looked frozen before.
         if (!joinedNicknames.contains(nick)) {
-            rejectAction(nick, "match in progress; cannot join now");
+            rejectNickname(nick, view, "nickname not in this game");
             return;
         }
-        // Push the snapshot to the reconnected client (bundle: snap + commit).
+        // Remember if the game was paused. If it was NOT paused we must
+        // not tell everyone "match resumed", because for them the game
+        // never stopped.
+        final boolean wasPaused = phase.isPaused();
+        // Send the whole game state to the player who came back, so
+        // they can see everything again.
         final GameSnapshot snap = buildSnapshot();
         sendToNicknameAndCommit(nick, new ViewCall() {
             @Override public void apply(VirtualView v) throws RemoteException {
                 v.onGameSnapshot(snap);
             }
         });
-        // Announce to the others (with commit).
+        // Tell the other players that this player came back.
         broadcastExceptAndCommit(nick, new ViewCall() {
             @Override public void apply(VirtualView v) throws RemoteException {
                 v.onPlayerReconnected(nick);
             }
         });
-        // If there are 2+ connected now, leave the pause.
-        int connected = countConnectedInMatch();
-        if (connected >= 2) {
+        // If the game was paused and now there are at least 2 players
+        // online again, start the game again. If it was never paused we
+        // do nothing here: the state we just sent is enough, and we do
+        // not want to disturb the player whose turn it is.
+        if (wasPaused && countConnectedInMatch() >= 2) {
             resumeFromPause();
             broadcastAndCommit(new ViewCall() {
                 @Override public void apply(VirtualView v) throws RemoteException {
                     v.onMatchResumed();
                 }
             });
-            // Re-send the current *Turn to whoever's turn it is;
-            // every sendXxxTurnTo has been updated to use
-            // sendToNicknameAndCommit, so the commit is included.
+            // Tell the player whose turn it is to play again.
             if (currentPlayerNickname != null) {
                 phase.emitCurrentTurnTo(this, currentPlayerNickname);
             }

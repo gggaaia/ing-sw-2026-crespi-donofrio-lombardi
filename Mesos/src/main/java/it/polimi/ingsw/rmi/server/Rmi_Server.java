@@ -32,11 +32,11 @@ public class Rmi_Server implements VirtualServer {
 
     @Override
     public void connect(String nickname, VirtualView client) throws RemoteException {
-        // Phase check FIRST: if the controller isn't accepting new
-        // connections, drop the attempt with "no game" WITHOUT
-        // registering. See the matching comment in
-        // {@code Socket_ClientHandler.visitConnect}.
-        if (!controller.isAcceptingNewConnections()) {
+        // Let the player in only if the game is taking new players, or
+        // if this is a player coming back to a game that is already
+        // running (canReconnect). If neither is true, tell them there
+        // is no game to join and stop here (do not register them).
+        if (!controller.isAcceptingNewConnections() && !controller.canReconnect(nickname)) {
             try {
                 client.onNicknameRejected("no game currently accepting players");
             } catch (RemoteException ignored) {
