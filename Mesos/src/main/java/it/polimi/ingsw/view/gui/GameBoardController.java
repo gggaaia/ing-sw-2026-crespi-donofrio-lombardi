@@ -95,7 +95,7 @@ public class GameBoardController {
                     updateCardRow(lowerRowBox, board.getLowerRow());
                     updateTurnOrderTile(board.getTurnOrderTile());
                     updateOfferingTrack(board.getOfferingTrack());
-                    updateDecks();
+                    updateDecks(state.getCurrentEra());
                 }
 
                 // Re-apply visual cues if a prompt was active during the refresh
@@ -110,13 +110,38 @@ public class GameBoardController {
     }
 
     /**
-     * Renders the deck placeholders on the board.
+     * Renders the deck placeholders on the board dynamically based on the current Era.
      */
-    private void updateDecks() {
+    private void updateDecks(it.polimi.ingsw.model.enums.Era currentEra) {
         if (decksBox == null) return;
         decksBox.getChildren().clear();
-        decksBox.getChildren().add(createDeckNode("back_0"));
-        decksBox.getChildren().add(createDeckNode("back_96"));
+
+        // Default backs for ERA_1
+        String tribeBack = "back_0";
+        String buildingBack = "back_96";
+
+        if (currentEra != null) {
+            switch (currentEra) {
+                case ERA_1 -> {
+                    tribeBack = "back_0";
+                    buildingBack = "back_96";
+                }
+                case ERA_2 -> {
+
+                    tribeBack = "back_29";
+                    buildingBack = "back_102";
+                }
+                case ERA_3 -> {
+
+                    tribeBack = "back_57";
+                    buildingBack = "back_109";
+                }
+            }
+        }
+
+        // Add both decks with their respective dynamic backs
+        decksBox.getChildren().add(createDeckNode(tribeBack));
+        decksBox.getChildren().add(createDeckNode(buildingBack));
     }
 
     /**
