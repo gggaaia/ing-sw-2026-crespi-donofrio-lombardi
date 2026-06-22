@@ -106,3 +106,6 @@ ARCHITECTURE.md
 
 # Ignore extracted images folder for JavaFX
 src/main/resources/images/
+
+# Local database configuration (Supabase)
+config.properties
