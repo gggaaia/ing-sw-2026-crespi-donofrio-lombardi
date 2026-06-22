@@ -98,7 +98,7 @@ public class ServerController {
 
     private PhaseLogic phaseBeforePause;
     private Timer lonePlayerTimer;
-    public static final long LONE_PLAYER_TIMEOUT_MS = 120_000L;
+    public static final long LONE_PLAYER_TIMEOUT_MS = 60_000L;
 
     private List<String> finalLeaderboard;
     private List<String> finalWinners;

@@ -346,7 +346,69 @@ public class TuiPrinter {
     }
 
     /**
-     * Formats the global leaderboard into an ANSI-colored text block for the TUI,
+     * Formats the final local match results
+     *
+     * @param winners     the list of winner nicknames
+     * @param leaderboard the ordered list of all player nicknames from first to last
+     * @return the colorized and boxed leaderboard string
+     */
+    public static String formatLocalLeaderboard(List<String> winners, List<String> leaderboard) {
+        StringBuilder sb = new StringBuilder();
+        List<String> contentLines = new ArrayList<>();
+
+        contentLines.add("WINNERS:");
+        for (String winner : winners) {
+            if (winner != null && !winner.trim().isEmpty()) {
+                contentLines.add("  - " + winner.trim());
+            }
+        }
+        contentLines.add("--------------------");
+
+        contentLines.add("FINAL STANDINGS:");
+        for (int i = 0; i < leaderboard.size(); i++) {
+            if (leaderboard.get(i) != null) {
+                contentLines.add("  " + (i + 1) + ". " + leaderboard.get(i).trim());
+            }
+        }
+
+        String title = "=== LOCAL LEADERBOARD ===";
+
+        int maxContentLength = 0;
+        for (String line : contentLines) {
+            if (line.length() > maxContentLength) {
+                maxContentLength = line.length();
+            }
+        }
+
+        int minBoxWidth = maxContentLength + 4;
+        int boxWidth = Math.max(minBoxWidth, title.length());
+        int innerWidth = boxWidth - 4;
+
+        int totalTitlePadding = boxWidth - title.length();
+        int titlePadLeft = totalTitlePadding / 2;
+        int titlePadRight = totalTitlePadding - titlePadLeft;
+        String topBorder = "=".repeat(titlePadLeft) + title + "=".repeat(titlePadRight);
+
+        String bottomBorder = "=".repeat(boxWidth);
+        sb.append(System.lineSeparator()).append(YELLOW).append(topBorder).append(RESET).append("\n");
+
+        for (String line : contentLines) {
+            sb.append(YELLOW).append("| ").append(RESET);
+            sb.append(line);
+            int padding = innerWidth - line.length();
+            if (padding > 0) {
+                sb.append(" ".repeat(padding));
+            }
+            sb.append(YELLOW).append(" |").append(RESET).append("\n");
+        }
+
+        sb.append(YELLOW).append(bottomBorder).append(RESET).append("\n");
+
+        return sb.toString();
+    }
+
+    /**
+     * Formats the global leaderboard
      * highlighting the current player's rank and appending a summary box.
      *
      * @param globalLeaderboard sorted map of player nicknames and their scores.
@@ -359,7 +421,7 @@ public class TuiPrinter {
         String nl = System.lineSeparator();
 
         sb.append(nl).append(BLUE)
-                .append("=== GLOBAL LEADERBOARD FOR ").append(numPlayers).append("PLAYERS MATCHES ===")
+                .append("=== GLOBAL LEADERBOARD FOR ").append(numPlayers).append(" PLAYERS MATCHES ===")
                 .append(RESET).append(nl);
 
         int rank = 1;
