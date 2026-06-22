@@ -114,20 +114,12 @@ public class PlayerCountController {
     public void onCloseClicked(ActionEvent event) {
         System.out.println("LOG: The user aborted the game creation. Returning to Welcome.");
 
-        // Tell the GUI to abort the waiting future (triggers CancellationException)
+        // 1. Unlock the network thread (which will trigger the default match creation)
         GuiView.abortPlayerCount();
 
-        // Find the main window and remove the blur effect
-        Stage popupStage = (Stage) sfondoPopup.getScene().getWindow();
-        Stage mainStage = (Stage) popupStage.getOwner();
-        if (mainStage != null && mainStage.getScene() != null) {
-            mainStage.getScene().getRoot().setEffect(null);
-        }
-
-        // Close the popup
-        popupStage.close();
-
-        // Reset the GUI state
-        GuiView.resetForNewGame();
+        // 2. WHILE the thread attempts to start the match, we sever the connection
+//    and force a hard reload of the "Welcome" screen.
+//    This will eliminate the blur, close the popup, and ignore the Lobby loading.
+        GuiView.abortLobbyAndDisconnect();
     }
 }
