@@ -200,6 +200,13 @@ public abstract class PhaseLogic {
             c.acceptColorPick(nick, color);
         }
         @Override
+        public void advanceCurrent(ServerController c) {
+            // The current picker dropped: skip to the next connected
+            // player (giving the one who left a default color) instead
+            // of waiting for them.
+            c.advanceColorPickingUntilConnected();
+        }
+        @Override
         public void emitCurrentTurnTo(ServerController c, String nick) {
             c.sendColorTurnTo(nick);
         }

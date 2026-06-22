@@ -674,30 +674,47 @@ public class ClientController {
 
     /**
      * The client's connect attempt was rejected by the server.
-     * Special case: print it RIGHT NOW (no commit) and trigger the
-     * latch, because this is a session terminator and no commit will
-     * follow.
+     * We show the error right now (no commit follows). If the user can
+     * fix it by picking another name we ask again and retry; otherwise
+     * we close the session.
      */
     public synchronized void nicknameRejected(String reason) {
         view.displayError(reason);
         // Retryable cases (duplicate nickname, bad syntax): the server
-        // is still accepting connects, just not THIS nickname. Prompt
-        // for a different one and re-send connect via the adapter's
-        // installed callback. We stay synchronized while prompting:
-        // no other event can usefully race in (server is waiting on
-        // the next connect from us), and any incoming callback after
-        // the retry just queues on the monitor.
+        // is still accepting connects, just not THIS nickname. Ask for
+        // a different one and re-send connect.
         if (isRetryableConnectError(reason) && retryConnect != null) {
-            view.displayInfo("Please choose a different nickname.");
-            String newNick = view.promptNickname();
-            this.myNickname = newNick;
-            try {
-                retryConnect.run();
-            } catch (RuntimeException e) {
-                view.displayError("Reconnect failed: " + e.getMessage());
-                this.connectionRejected = true;
-                endLatch.countDown();
-            }
+            // Do the asking + re-sending on a NEW thread and return
+            // from here right away.
+            //
+            // This method runs inside a callback from the server. On
+            // RMI the server is waiting for this callback to finish. If
+            // we asked the user for a new name and re-sent connect
+            // here, that connect could cause another rejection callback
+            // that needs this same lock we are still holding, so the
+            // two sides would wait for each other forever (you type a
+            // name and nothing happens). Returning first frees both
+            // sides, so the next try works.
+            final Runnable retry = retryConnect;
+            Thread t = new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    view.displayInfo("Please choose a different nickname.");
+                    String newNick = view.promptNickname();
+                    setNickname(newNick);
+                    try {
+                        retry.run();
+                    } catch (RuntimeException e) {
+                        view.displayError("Reconnect failed: " + e.getMessage());
+                        synchronized (ClientController.this) {
+                            connectionRejected = true;
+                        }
+                        endLatch.countDown();
+                    }
+                }
+            }, "nickname-retry");
+            t.setDaemon(true);
+            t.start();
             return;
         }
         view.displayInfo("Closing connection.");

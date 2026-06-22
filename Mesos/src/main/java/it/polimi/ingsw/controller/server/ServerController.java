@@ -66,6 +66,14 @@ public class ServerController {
     // === match state ===
 
     private Match match;
+    /**
+     * True once the roster is locked and the game has begun (from color
+     * picking onward); false while still in the lobby. We can't just
+     * use {@code match != null} for this: the {@link Match} object is
+     * only built after colors are picked, but color picking is already
+     * part of the game (players can drop and must be able to reconnect).
+     */
+    private boolean gameStarted;
     private String currentPlayerNickname;
     private final Set<TotemColor> availableColors = EnumSet.allOf(TotemColor.class);
 
@@ -154,7 +162,7 @@ public class ServerController {
      * that already started (we say no to them).
      */
     boolean isActiveMatchMember(String nick) {
-        return match != null && !phase.isFinished() && joinedNicknames.contains(nick);
+        return gameStarted && !phase.isFinished() && joinedNicknames.contains(nick);
     }
 
     public synchronized void disconnect(String nick) {
@@ -352,11 +360,6 @@ public class ServerController {
      * the heartbeat pinging a doomed connection.
      */
     void rejectNickname(String nick, final VirtualView targetView, final String reason) {
-        // Terminal case: the client will close the connection.
-        // {@code ClientController.nicknameRejected} prints the error
-        // directly (no commit) and counts down the session latch.
-        // No commit here either: we'd just refresh on an empty
-        // mini-state, which adds nothing.
         if (targetView == null) {
             return;
         }
@@ -366,6 +369,8 @@ public class ServerController {
         // server.send falls back to inline execution when nick isn't
         // an RMI client (which is now always the case here, since
         // we just unregistered it), so the rejection still goes out.
+        // The client handles this callback quickly and does any
+        // re-prompt on its own thread, so it's safe to send it here.
         server.send(nick, new Runnable() {
             @Override
             public void run() {
@@ -540,6 +545,10 @@ public class ServerController {
     }
 
     private void enterColorPicking() {
+        // From here on the roster is locked: the game is "in progress",
+        // so disconnects keep the player (for reconnect) instead of
+        // dropping them from the lobby.
+        gameStarted = true;
         colorPickQueue.clear();
         colorPickQueue.addAll(joinedNicknames);
         currentPlayerNickname = colorPickQueue.peek();
@@ -575,31 +584,52 @@ public class ServerController {
         availableColors.remove(color);
         colorPickQueue.poll();
 
-        if (colorPickQueue.isEmpty()) {
-            // Bundle: bare colorPicked (no commit) + the full
-            // startMatch sequence that ends with its own commits.
-            // This way the first visible commit shows up with the
-            // phase already in the match.
+        // Announce the pick now (no commit); the advance below sends the
+        // next color turn (or starts the match) together with the commit
+        // so the user sees one single screen.
+        broadcast(new ViewCall() {
+            @Override public void apply(VirtualView v) throws RemoteException {
+                v.onColorPicked(nick, color);
+            }
+        });
+        advanceColorPickingUntilConnected();
+    }
+
+    /**
+     * Moves color picking on to the next player who is actually
+     * connected. If the next player has dropped, we don't wait for them:
+     * we give them the first free color so they can still be part of the
+     * match (they keep it when they reconnect) and skip ahead, exactly
+     * like the other phases skip disconnected players instead of waiting
+     * forever. When nobody is left to pick, the match starts.
+     */
+    void advanceColorPickingUntilConnected() {
+        while (!colorPickQueue.isEmpty()) {
+            final String next = colorPickQueue.peek();
+            if (server.isConnected(next)) {
+                currentPlayerNickname = next;
+                final Set<TotemColor> avail = new HashSet<>(availableColors);
+                broadcastAndCommit(new ViewCall() {
+                    @Override public void apply(VirtualView v) throws RemoteException {
+                        v.onColorTurn(next, avail);
+                    }
+                });
+                return;
+            }
+            // Disconnected at their turn: give them the first free color
+            // so the match can still include them, then move on.
+            final TotemColor assigned = availableColors.iterator().next();
+            colorByNickname.put(next, assigned);
+            playerByNickname.put(next, new Player(next, assigned));
+            availableColors.remove(assigned);
+            colorPickQueue.poll();
             broadcast(new ViewCall() {
                 @Override public void apply(VirtualView v) throws RemoteException {
-                    v.onColorPicked(nick, color);
-                }
-            });
-            startMatch();
-        } else {
-            currentPlayerNickname = colorPickQueue.peek();
-            final String next = currentPlayerNickname;
-            final Set<TotemColor> avail = new HashSet<>(availableColors);
-            // Bundle: colorPicked + colorTurn(next) in a single
-            // commit: the user sees one single screen with the colour
-            // that was just picked and the next color picker.
-            broadcastAndCommit(new ViewCall() {
-                @Override public void apply(VirtualView v) throws RemoteException {
-                    v.onColorPicked(nick, color);
-                    v.onColorTurn(next, avail);
+                    v.onColorPicked(next, assigned);
                 }
             });
         }
+        startMatch();
     }
 
     private void startMatch() {
@@ -1244,7 +1274,8 @@ public class ServerController {
         }
 
         boolean wasJoined;
-        if (match == null) {
+        if (!gameStarted) {
+            // Still in the lobby: a player who leaves is simply dropped.
             wasJoined = joinedNicknames.remove(nick);
             if (nick.equals(firstPlayerNickname)) {
                 firstPlayerNickname = joinedNicknames.isEmpty() ? null : joinedNicknames.get(0);
@@ -1254,6 +1285,8 @@ public class ServerController {
                 return;
             }
         } else {
+            // Game in progress (color picking onward): keep the player
+            // in the roster so they can reconnect.
             wasJoined = joinedNicknames.contains(nick);
         }
 
@@ -1266,7 +1299,7 @@ public class ServerController {
 
         // "disconnect + maybe pause" bundle: one commit in either
         // case. The client sees a single screen.
-        if (match != null && !phase.isFinished()) {
+        if (gameStarted && !phase.isFinished()) {
             int connected = countConnectedInMatch();
             if (connected <= 1) {
                 enterPause();
@@ -1563,6 +1596,7 @@ public class ServerController {
     // ====================================================================
 
     private void resetToLobby() {
+        gameStarted = false;
         if (match != null) {
             gameManager.closeMatch(match.getMatchID());
             match = null;
