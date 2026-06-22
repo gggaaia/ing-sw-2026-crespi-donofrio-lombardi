@@ -11,7 +11,7 @@
 <?import javafx.scene.paint.Color?>
 <?import javafx.scene.text.Font?>
 
-<AnchorPane prefHeight="250.0" prefWidth="400.0" style="-fx-background-radius: 30;" xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1" fx:controller="it.polimi.ingsw.view.gui.LobbyController">
+<AnchorPane prefHeight="250.0" prefWidth="400.0" stylesheets="@../css/style.css" style="-fx-background-radius: 30;" xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1" fx:controller="it.polimi.ingsw.view.gui.LobbyController">
    <children>
       <ImageView fx:id="sfondoPopup" fitHeight="250.0" fitWidth="400.0" pickOnBounds="true">
          <image>
@@ -40,14 +40,12 @@
             <Font name="Tempus Sans ITC" size="14.0" />
          </font>
       </Label>
-      <ScrollPane hbarPolicy="NEVER" layoutX="74.0" layoutY="69.0" style="-fx-background-color: transparent; -fx-background: transparent;">
+
+      <ScrollPane hbarPolicy="NEVER" vbarPolicy="AS_NEEDED" layoutX="74.0" layoutY="69.0" style="-fx-background-color: transparent; -fx-background: transparent;">
          <content>
-            <VBox fx:id="playersContainer" alignment="TOP_CENTER" prefHeight="163.0" prefWidth="248.0" spacing="10.0">
-               <children>
-                  <VBox fx:id="plaersContainer" prefHeight="167.0" prefWidth="248.0" spacing="10.0" />
-               </children>
-            </VBox>
+            <VBox fx:id="playersContainer" alignment="TOP_CENTER" prefHeight="163.0" prefWidth="248.0" spacing="10.0" />
          </content>
       </ScrollPane>
+
    </children>
 </AnchorPane>

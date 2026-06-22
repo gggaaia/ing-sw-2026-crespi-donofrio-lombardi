@@ -19,6 +19,7 @@ import javafx.scene.control.Label;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Pane;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
@@ -429,8 +430,13 @@ public class GameBoardController {
 
     /**
      * Renders the Turn Order Tile and maps occupied slots to player totems.
+     * <p>
+     * This method uses absolute pixel coordinates to map the totems exactly
+     * onto the white slots drawn on the specific background image. It calculates
+     * the exact vertical centers based on the current number of players.
+     * </p>
      *
-     * @param tile The TurnOrderTile model object.
+     * @param tile The {@link TurnOrderTile} model object containing the current order state.
      */
     private void updateTurnOrderTile(TurnOrderTile tile) {
         if (turnOrderBox == null) return;
@@ -439,43 +445,71 @@ public class GameBoardController {
 
         TurnOrderSlot[] slots = tile.getTurnOrderSlots();
         int numPlayers = slots.length;
-        StackPane tilePane = new StackPane();
+        int fileIndex = numPlayers - 1; // 1 = 2p, 2 = 3p, etc.
 
+        // Base dimensions for the card background and individual totems
+        // (Totem dimensions rely on getTotemImageView which fixes bounds to 40x40)
+        double cardW = 80, cardH = 140, totemW = 40, totemH = 40;
+
+        // Pre-calculated vertical centers (in pixels).
+        // The array index maps directly to the calculated fileIndex.
+        double[][] yCenters = {
+                {},                    // Index 0 (1 player, unused)
+                {29, 55},              // Index 1 (corresponds to 2 players)
+                {25, 51, 77},          // Index 2 (corresponds to 3 players)
+                {13, 39, 65, 91},      // Index 3 (corresponds to 4 players)
+                {6, 32, 58, 84, 110}   // Index 4 (corresponds to 5 players)
+        };
+
+        StackPane tilePane = new StackPane();
+        tilePane.setPrefSize(cardW, cardH);
+
+        // 1. Load the background image of the Turn Order Tile
         try {
-            int fileIndex = numPlayers - 1;
             String path = "/images/cards/orderCards/turnorderslot_" + fileIndex + ".png";
             Image img = new Image(getClass().getResourceAsStream(path));
             if (img.isError()) throw new Exception();
             ImageView bgImage = new ImageView(img);
-            bgImage.setFitHeight(140); bgImage.setPreserveRatio(true);
+            bgImage.setFitWidth(cardW);
+            bgImage.setFitHeight(cardH);
+
+            // Force the ImageView to exactly fill the 80x140 bounds to align with coordinates
+            bgImage.setPreserveRatio(false);
             tilePane.getChildren().add(bgImage);
         } catch (Exception e) {
-            Rectangle rect = new Rectangle(70, 140, Color.web("#34495E"));
+            Rectangle rect = new Rectangle(cardW, cardH, Color.web("#34495E"));
             tilePane.getChildren().add(rect);
         }
 
-        VBox totemsOverlay = new VBox();
-        totemsOverlay.setAlignment(Pos.CENTER);
-        totemsOverlay.setPadding(new javafx.geometry.Insets(15, 0, 15, 0));
+        // 2. Create a transparent overlay Pane to handle absolute coordinates for the Totems
+        Pane totemsOverlay = new Pane();
+        totemsOverlay.setPrefSize(cardW, cardH);
 
-        // Renders totems inside the defined slots
+        double[] yPos = yCenters[fileIndex];
+
+        // 3. Position the totems
         for (int i = 0; i < numPlayers; i++) {
             TurnOrderSlot s = slots[i];
-            StackPane slotContainer = new StackPane();
-            slotContainer.setPrefHeight(110.0 / numPlayers);
 
             if (s.isOccupied()) {
                 ImageView totemImg = getTotemImageView(s.getTotemColor());
-                if (totemImg != null) slotContainer.getChildren().add(totemImg);
+                if (totemImg != null) {
+                    // Set exact X and Y coordinates centered on the calculated markers
+                    totemImg.setLayoutX((cardW - totemW) / 2.0);
+                    totemImg.setLayoutY(yPos[i] - totemH / 2.0);
+
+                    totemsOverlay.getChildren().add(totemImg);
+                }
             }
-            totemsOverlay.getChildren().add(slotContainer);
         }
+
         tilePane.getChildren().add(totemsOverlay);
         turnOrderBox.getChildren().add(tilePane);
     }
 
     /**
      * Renders the Offering Track and places player totems on occupied tiles.
+     * Uses absolute positioning to place the totem exactly inside the white box.
      *
      * @param track List of OfferingTiles representing the current track.
      */
@@ -484,23 +518,52 @@ public class GameBoardController {
         offeringTrackBox.getChildren().clear();
         if (track == null) return;
 
+        // Fixed dimensions for Offering Tiles and Totems
+        double cardW = 100, cardH = 140;
+        double totemW = 40, totemH = 40;
+
+        // Center point on the Y-axis for the white box.
+        double whiteBoxCenterY = 30.0;
+
         for (OfferingTile t : track) {
             StackPane tilePane = new StackPane();
+            tilePane.setPrefSize(cardW, cardH);
+
+            // 1. Load the background image of the Offering Tile
             try {
                 String path = "/images/cards/offerTile/offertile_" + t.getLetter() + ".png";
                 Image img = new Image(getClass().getResourceAsStream(path));
                 if (img.isError()) throw new Exception();
-                ImageView iv = new ImageView(img);
-                iv.setFitWidth(100); iv.setFitHeight(140); iv.setPreserveRatio(true);
-                tilePane.getChildren().add(iv);
+                ImageView bgImage = new ImageView(img);
+                bgImage.setFitWidth(cardW);
+                bgImage.setFitHeight(cardH);
+
+                // Force the image to exactly fill the 100x140 bounds
+                bgImage.setPreserveRatio(false);
+                tilePane.getChildren().add(bgImage);
             } catch (Exception e) {
-                Rectangle rect = new Rectangle(100, 140, Color.web("#1E8449"));
+                Rectangle rect = new Rectangle(cardW, cardH, Color.web("#1E8449"));
                 tilePane.getChildren().add(rect);
             }
+
+            // 2. Create a transparent overlay Pane for absolute Totem coordinates
+            Pane totemOverlay = new Pane();
+            totemOverlay.setPrefSize(cardW, cardH);
+
+            // 3. If the tile is occupied, calculate coordinates and position the totem
             if (t.isOccupied()) {
                 ImageView totemImg = getTotemImageView(t.getCurrentTotemColor());
-                if (totemImg != null) tilePane.getChildren().add(totemImg);
+                if (totemImg != null) {
+                    // Align to the center on the X-axis
+                    totemImg.setLayoutX((cardW - totemW) / 2.0);
+                    // Align using the calculated Y center for the white box
+                    totemImg.setLayoutY(whiteBoxCenterY - (totemH / 2.0));
+
+                    totemOverlay.getChildren().add(totemImg);
+                }
             }
+
+            tilePane.getChildren().add(totemOverlay);
             offeringTrackBox.getChildren().add(tilePane);
         }
     }
