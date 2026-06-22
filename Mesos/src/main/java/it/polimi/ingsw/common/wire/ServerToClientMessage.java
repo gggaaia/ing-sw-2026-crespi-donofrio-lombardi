@@ -9,6 +9,7 @@ import it.polimi.ingsw.model.enums.TotemColor;
 
 import java.io.Serializable;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -47,7 +48,7 @@ public abstract class ServerToClientMessage implements Serializable {
         void visitPrestigeChanged(String nick, int newPrestige);
         void visitFoodChanged(String nick, int newFood);
         void visitRoundEnded();
-        void visitGameEnded(List<String> leaderboard, List<String> winners);
+        void visitGameEnded(List<String> leaderboard, List<String> winners, Map<String, Integer> globalLeaderboard);
         void visitMatchPaused(String reason);
         void visitMatchResumed();
         void visitPlayerDisconnected(String nick);
@@ -240,10 +241,11 @@ public abstract class ServerToClientMessage implements Serializable {
         private static final long serialVersionUID = 1L;
         private final List<String> leaderboard;
         private final List<String> winners;
-        public GameEnded(List<String> leaderboard, List<String> winners) {
-            this.leaderboard = leaderboard; this.winners = winners;
+        private final Map<String, Integer> globalLeaderboard;
+        public GameEnded(List<String> leaderboard, List<String> winners,  Map<String, Integer> globalLeaderboard) {
+            this.leaderboard = leaderboard; this.winners = winners; this.globalLeaderboard = globalLeaderboard;
         }
-        @Override public void accept(Visitor v) { v.visitGameEnded(leaderboard, winners); }
+        @Override public void accept(Visitor v) { v.visitGameEnded(leaderboard, winners, globalLeaderboard); }
     }
 
     public static class MatchPaused extends ServerToClientMessage {

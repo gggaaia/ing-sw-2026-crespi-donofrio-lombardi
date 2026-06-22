@@ -13,6 +13,7 @@ import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.rmi.RemoteException;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -121,8 +122,10 @@ public class Socket_VirtualClient implements VirtualView {
         send(new ServerToClientMessage.RoundEnded());
     }
 
-    @Override public void onGameEnded(List<String> leaderboard, List<String> winners) throws RemoteException {
-        send(new ServerToClientMessage.GameEnded(leaderboard, winners));
+    //Java during serialization uses the concrete LinkedHashMap object and not the Map from the interface maintaining the order
+    @Override
+    public void onGameEnded(List<String> leaderboard, List<String> winners, Map<String, Integer> globalLeaderboard) throws RemoteException {
+        send(new ServerToClientMessage.GameEnded(leaderboard, winners, globalLeaderboard));
     }
 
     @Override public void onMatchPaused(String reason) throws RemoteException {

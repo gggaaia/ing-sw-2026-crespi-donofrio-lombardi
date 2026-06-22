@@ -16,6 +16,7 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.rmi.RemoteException;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -201,8 +202,8 @@ public class Socket_Client implements ServerToClientMessage.Visitor {
         controller.roundEnded();
     }
 
-    @Override public void visitGameEnded(List<String> leaderboard, List<String> winners) {
-        controller.gameEnded(leaderboard, winners);
+    @Override public void visitGameEnded(List<String> leaderboard, List<String> winners, Map<String, Integer> globalLeaderboard) {
+        controller.gameEnded(leaderboard, winners, globalLeaderboard);
     }
 
     @Override public void visitMatchPaused(String reason) {

@@ -327,6 +327,13 @@ public class Match implements Serializable {
     }
 
 
+    /**
+     * Calculates end-of-game bonus Prestige Points (PP) for all players.
+     * <p>
+     * This method updates each player's score based on specific card counters and
+     * iterates through their building cards to apply final game effects and
+     * add their respective end-of-game PP bonuses.
+     */
     public void resolveEndMatch() {
         for (Player player : playersList) {
             player.changePP(player.getInventorCounter()*player.countDistinctInventorIcons());
@@ -340,6 +347,12 @@ public class Match implements Serializable {
         }
     }
 
+    /**
+     * Resolves all active event cards from the board's lower row.
+     * <p>
+     * This method iterates through the available event cards in the specified row
+     * and applies their respective event effects to all players in the game.
+     */
     public void resolveEvents() {
         CardRow cardRow= board.getLowerRow();
         List<EventCard> events=cardRow.getEventCards();
@@ -348,6 +361,13 @@ public class Match implements Serializable {
         }
     }
 
+
+    /**
+     * Resolves end-of-round effects for all player's  buildings.
+     * <p>
+     * This method iterates through each player's building cards and triggers
+     * the specific effects that activate exclusively at the end of a round.
+     */
     public void resolveBuildings() {
         for (Player player : playersList) {
             List<BuildingCard> buildings = player.getPlayerBuildings();

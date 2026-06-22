@@ -11,6 +11,7 @@ import it.polimi.ingsw.model.enums.TotemColor;
 import java.rmi.Remote;
 import java.rmi.RemoteException;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -111,7 +112,7 @@ public interface VirtualView extends Remote {
     void onRoundEnded() throws RemoteException;
 
     /** Match is over. */
-    void onGameEnded(List<String> leaderboard, List<String> winners) throws RemoteException;
+    void onGameEnded(List<String> leaderboard, List<String> winners, Map<String, Integer> globalLeaderboard) throws RemoteException;
 
     // === PAUSE / RECONNECT EVENTS (broadcast) ===
 

@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
 import java.util.Set;
+import java.util.concurrent.LinkedBlockingQueue;
 
 /**
  * Text-based view. Writes to System.out and reads from System.in
@@ -36,16 +37,26 @@ public class TuiView implements View {
     private final Object outLock = new Object();
     private String activePrompt;
 
+    private final LinkedBlockingQueue<String> inputQueue = new LinkedBlockingQueue<>();
+
     /**
-     * Reuses an existing Scanner on {@code System.in}. Required: a
-     * Scanner read-aheads from the underlying stream into its own
-     * buffer, so two Scanners on the same {@code System.in} would
-     * steal input from each other. The caller (typically
-     * {@code Client}) creates the single JVM-wide Scanner and hands
-     * it in here.
+     * Reuses a JVM-wide Scanner on {@code System.in} to prevent input stealing.
+     * Spawns a background daemon thread that continuously reads lines into an
+     * internal queue, decoupling terminal I/O from the prompt lifecycle.
+     *
+     * @param scan the single shared Scanner instance
      */
     public TuiView(Scanner scan) {
         this.scan = scan;
+
+        Thread inputReaderThread = new Thread(() -> {
+            while (scan.hasNextLine()) {
+                String line = scan.nextLine();
+                inputQueue.add(line);
+            }
+        });
+        inputReaderThread.setDaemon(true);
+        inputReaderThread.start();
     }
 
     /** Convenience for tests / standalone use. */
@@ -110,8 +121,15 @@ public class TuiView implements View {
         }
         appendPlayersOverview(sb, state, nl);
         if (state.getFinalLeaderboard() != null) {
-            sb.append("leaderboard: ").append(state.getFinalLeaderboard()).append(nl);
-            sb.append("winners:     ").append(state.getFinalWinners()).append(nl);
+            sb.append(TuiPrinter.formatLocalLeaderboard(state.getFinalWinners(), state.getFinalLeaderboard()));
+
+            Map<String, Integer> global = state.getGlobalLeaderboard();
+            if (global != null && !global.isEmpty()) {
+                String myName = state.getMyNickname();
+                int playerCount = state.getJoinedPlayers().size();
+
+                sb.append(TuiPrinter.formatGlobalLeaderboard(global, myName, playerCount)).append(nl);
+            }
         }
         sb.append(TuiPrinter.BLUE).append(LONG_SEP).append(TuiPrinter.RESET);
         // NB: pendingError is NOT printed here. That's handled by
@@ -222,18 +240,28 @@ public class TuiView implements View {
     }
 
     private List<Integer> promptIntList(String prompt) {
-        String line = promptLine(prompt).trim();
-        List<Integer> result = new ArrayList<>();
-        if (line.isEmpty()) return result;
-        String[] parts = line.split("\\s*,\\s*");
-        for (String p : parts) {
-            try {
-                result.add(Integer.parseInt(p.trim()));
-            } catch (NumberFormatException e) {
-                emitLine("Ignoring '" + p + "' (not a valid card id).");
+        while (true) {
+            String line = promptLine(prompt).trim();
+            List<Integer> result = new ArrayList<>();
+            if (line.isEmpty()) return result;
+
+            String[] parts = line.split("\\s*,\\s*");
+            boolean isValidSuite = true;
+
+            for (String p : parts) {
+                try {
+                    result.add(Integer.parseInt(p.trim()));
+                } catch (NumberFormatException e) {
+                    emitLine("Error: '" + p + "' is not a valid card id. Please re-enter the entire list.");
+                    isValidSuite = false;
+                    break;
+                }
+            }
+
+            if (isValidSuite) {
+                return result;
             }
         }
-        return result;
     }
 
     /**
@@ -259,7 +287,16 @@ public class TuiView implements View {
             System.out.print("> ");
             System.out.flush();
         }
-        String line = scan.nextLine();
+
+        inputQueue.clear();
+        String line = "";
+        try {
+            line = inputQueue.take();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return "";
+        }
+
         synchronized (outLock) {
             activePrompt = null;
         }
@@ -303,7 +340,7 @@ public class TuiView implements View {
      * current occupant). The boxed formatters live in
      * {@link TuiPrinter}; here we just decide the order of the blocks.
      */
-    private void appendBoardOverview(StringBuilder sb, Board board, String nl) {
+    private void    appendBoardOverview(StringBuilder sb, Board board, String nl) {
         TurnOrderTile tot = board.getTurnOrderTile();
         if (tot != null) {
             sb.append(TuiPrinter.BLUE).append("--- BOARD ---").append(TuiPrinter.RESET).append(nl);
