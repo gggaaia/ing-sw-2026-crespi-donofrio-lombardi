@@ -47,6 +47,8 @@ public class GuiView implements View {
     private TotemSelectionController totemController;
     private boolean isGameBoardLoaded = false;
     private GameBoardController boardController;
+
+    // References to game over UI controllers
     private GameOverController gameOverController;
     private LeaderboardController leaderboardController;
 
@@ -211,22 +213,22 @@ public class GuiView implements View {
 
             // Close the Nickname popup as soon as the server accepts us and updates the phase
             if (currentPopupStage != null && currentPopupStage.isShowing() && "Enter Nickname".equals(currentPopupStage.getTitle())) {
-                if (currentPhase != null && currentPhase != Phase.WAITING_FOR_NICKNAME) {
+                if (currentPhase != null && !(currentPhase instanceof Phase.WaitingForNickname)) {
                     currentPopupStage.close();
                     nicknameController = null;
                 }
             }
 
             boolean isPreGame = (currentPhase == null ||
-                    currentPhase == Phase.WAITING_FOR_NICKNAME ||
-                    currentPhase == Phase.WAITING_FOR_PLAYER_COUNT ||
-                    currentPhase == Phase.WAITING_FOR_PLAYERS);
+                    currentPhase instanceof Phase.WaitingForNickname ||
+                    currentPhase instanceof Phase.WaitingForPlayerCount ||
+                    currentPhase instanceof Phase.WaitingForPlayers);
 
             // We ONLY show the color picking popup if the server explicitly tells us we are in that phase.
-            boolean isColorPicking = (currentPhase == Phase.COLOR_PICKING);
+            boolean isColorPicking = (currentPhase instanceof Phase.ColorPicking);
 
             // Keep the Lobby open even during COLOR_PICKING as a background
-            if ((currentPhase == Phase.WAITING_FOR_PLAYERS || isColorPicking) && !isAborting) {
+            if ((currentPhase instanceof Phase.WaitingForPlayers || isColorPicking) && !isAborting) {
                 handleLobbyPhase(state);
             } else {
                 closeLobbyIfOpen();
@@ -242,15 +244,15 @@ public class GuiView implements View {
                 closeTotemPopupIfOpen();
             }
 
-            boolean isGameStarted = !isPreGame && !isColorPicking && currentPhase != Phase.GAME_ENDED;
+            boolean isGameStarted = !isPreGame && !isColorPicking && !(currentPhase instanceof Phase.GameEnded);
 
             // Handle Game Ended Phase
-            if (currentPhase == Phase.GAME_ENDED) {
+            if (currentPhase instanceof Phase.GameEnded) {
                 if (currentPopupStage != null && currentPopupStage.isShowing()) {
                     currentPopupStage.close();
                     currentPopupStage = null;
                 }
-                // Calls end game stage
+                // Call the match game over screen
                 showMatchGameOverScreen(state);
             }
             // If the game is started and NOT ended, show the normal Game Board
@@ -590,7 +592,6 @@ public class GuiView implements View {
      * Displays the match results on the main stage once the game has concluded.
      */
     private void showMatchGameOverScreen(ClientController state) {
-
         try {
             FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/game_over.fxml"));
             Parent root = loader.load();
@@ -634,7 +635,7 @@ public class GuiView implements View {
                 mainStage.setScene(new Scene(root));
                 mainStage.centerOnScreen();
 
-                // 2. PASS THE DATA
+                // 2. PASS THE DATA (No background thread needed, data is already stored in RAM!)
                 if (clientController != null && leaderboardController != null) {
                     Map<String, Integer> globalStats = clientController.getGlobalLeaderboard();
                     String myName = clientController.getMyNickname();
@@ -650,4 +651,5 @@ public class GuiView implements View {
                 e.printStackTrace();
             }
         });
-    }}
+    }
+}
