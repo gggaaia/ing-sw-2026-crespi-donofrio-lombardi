@@ -109,3 +109,4 @@ src/main/resources/images/
 
 # Local database configuration (Supabase)
 config.properties
+/supabase/
