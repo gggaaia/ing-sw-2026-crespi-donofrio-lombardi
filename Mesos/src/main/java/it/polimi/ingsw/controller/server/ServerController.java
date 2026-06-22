@@ -525,17 +525,21 @@ public class ServerController {
                 }
             });
         } else {
-            // Lobby still incomplete: the WAITING_FOR_PLAYERS snapshot
-            // is correct. Bundle: snap + count notification to whoever
-            // is already in, in the same commit cycle.
+            // Lobby still incomplete. The joiner needs BOTH the snapshot
+            // AND the "waiting for more players" line in its commit: the
+            // TUI prints nothing for the lobby phase except that log, so
+            // without it the joiner's screen looks frozen until the lobby
+            // fills up. The others just get the line (they already have a
+            // snapshot from when they joined).
+            final int joined = joinedNicknames.size();
+            final int total = expectedPlayers;
             final GameSnapshot snap = buildSnapshot();
             sendToNicknameAndCommit(nick, new ViewCall() {
                 @Override public void apply(VirtualView v) throws RemoteException {
                     v.onGameSnapshot(snap);
+                    v.onAwaitMorePlayers(joined, total);
                 }
             });
-            final int joined = joinedNicknames.size();
-            final int total = expectedPlayers;
             broadcastExceptAndCommit(nick, new ViewCall() {
                 @Override public void apply(VirtualView v) throws RemoteException {
                     v.onAwaitMorePlayers(joined, total);
