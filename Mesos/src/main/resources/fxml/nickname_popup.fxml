@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.effect.DropShadow?>
+<?import javafx.scene.image.Image?>
+<?import javafx.scene.image.ImageView?>
+<?import javafx.scene.layout.AnchorPane?>
+<?import javafx.scene.paint.Color?>
+<?import javafx.scene.text.Font?>
+
+<AnchorPane prefHeight="250.0" prefWidth="400.0" style="-fx-background-radius: 30; -fx-background-color: radial-gradient(center 50% 50%, radius 80%, #EFE4CBff 0%, #914631 80%); -fx-background-image: popup_background.png;" xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1" fx:controller="it.polimi.ingsw.view.gui.NicknameController">
+   <children>
+      <ImageView id="sfondoPopup" fx:id="sfondoPopup" fitHeight="250.0" fitWidth="400.0" pickOnBounds="true">
+         <image>
+            <Image url="@../images/popup_background.png" />
+         </image>
+      </ImageView>
+      <Label layoutX="140.0" layoutY="39.0" text="Enter nickname" textFill="#efe4cb">
+         <font>
+            <Font name="Tempus Sans ITC" size="18.0" />
+         </font>
+      </Label>
+      <TextField fx:id="nicknameField" layoutX="99.0" layoutY="90.0" prefHeight="39.0" prefWidth="207.0" promptText="Insert nickname here" style="-fx-background-color: #562A2Cff; -fx-background-radius: 10; -fx-border-color: #EFE4CBff; -fx-border-radius: 10; -fx-text-fill: #EFE4CBff;">
+         <font>
+            <Font name="Tempus Sans ITC" size="12.0" />
+         </font></TextField>
+      <Button layoutX="152.0" layoutY="184.0" mnemonicParsing="false" onAction="#onSubmitClicked" prefHeight="0.0" prefWidth="96.0" style="-fx-background-color: #EB5E28; -fx-background-radius: 10; -fx-border-color: #7B3C1F; -fx-border-radius: 10;" text="Continue" textFill="#fff3d8">
+         <font>
+            <Font name="Tempus Sans ITC" size="14.0" />
+         </font>
+         <effect>
+            <DropShadow>
+               <color>
+                  <Color opacity="0.2977098822593689" />
+               </color>
+            </DropShadow>
+         </effect></Button>
+      <Button layoutX="22.0" layoutY="19.0" mnemonicParsing="false" onAction="#onCloseClicked" style="-fx-background-color: #D85F2Bff; -fx-background-radius: 10; -fx-border-radius: 10; -fx-border-width: 1; -fx-border-color: #7B3C1F;" text="Close" textFill="#fff3d8">
+         <font>
+            <Font name="Tempus Sans ITC" size="10.0" />
+         </font>
+         <effect>
+            <DropShadow>
+               <color>
+                  <Color opacity="0.3104325234889984" />
+               </color>
+            </DropShadow>
+         </effect></Button>
+      <Label fx:id="errorLabel" layoutX="102.0" layoutY="136.0" style="-fx-background-color: #FF3333; -fx-padding: 5px 10px; -fx-background-radius: 5px;; -fx-padding: 5px 10px; -fx-background-radius: 5px;" text="This nickame is already taken!" textFill="WHITE">
+         <font>
+            <Font name="Tempus Sans ITC" size="10.0" />
+         </font>
+      </Label>
+   </children>
+</AnchorPane>

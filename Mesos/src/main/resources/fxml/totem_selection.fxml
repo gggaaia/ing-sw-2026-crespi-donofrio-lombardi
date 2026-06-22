@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.Cursor?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.effect.DropShadow?>
+<?import javafx.scene.image.Image?>
+<?import javafx.scene.image.ImageView?>
+<?import javafx.scene.layout.AnchorPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.paint.Color?>
+<?import javafx.scene.text.Font?>
+
+<AnchorPane prefHeight="250.0" prefWidth="400.0" style="-fx-background-radius: 30;" xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1" fx:controller="it.polimi.ingsw.view.gui.TotemSelectionController">
+   <children>
+      <ImageView fx:id="sfondoPopup" fitHeight="250.0" fitWidth="400.0" pickOnBounds="true">
+         <image>
+            <Image url="@../images/popup_background.png" />
+         </image>
+         <cursor>
+            <Cursor fx:constant="HAND" />
+         </cursor>
+      </ImageView>
+      <VBox alignment="TOP_CENTER" layoutX="47.0" layoutY="36.0" prefHeight="91.0" prefWidth="307.0" spacing="20.0">
+         <children>
+            <Label fx:id="titleLabel" text="Choose your totem color " textAlignment="CENTER" textFill="#efe4cb">
+               <font>
+                  <Font name="Tempus Sans ITC" size="18.0" />
+               </font>
+            </Label>
+            <HBox prefHeight="86.0" prefWidth="273.0" spacing="10.0">
+               <children>
+                  <ImageView fx:id="totem_BLACK" fitHeight="80.0" fitWidth="65.0" pickOnBounds="true" preserveRatio="true">
+                     <image>
+                        <Image url="@../images/black_totem.png" />
+                     </image>
+                     <effect>
+                        <DropShadow>
+                           <color>
+                              <Color opacity="0.3104325830936432" />
+                           </color>
+                        </DropShadow>
+                     </effect>
+                  </ImageView>
+                  <ImageView fx:id="totem_BLUE" fitHeight="80.0" fitWidth="69.0" pickOnBounds="true" preserveRatio="true">
+                     <image>
+                        <Image url="@../images/blue_totem.png" />
+                     </image>
+                     <effect>
+                        <DropShadow>
+                           <color>
+                              <Color opacity="0.3027989864349365" />
+                           </color>
+                        </DropShadow>
+                     </effect>
+                  </ImageView>
+                  <ImageView fx:id="totem_RED" fitHeight="80.0" fitWidth="69.0" pickOnBounds="true" preserveRatio="true">
+                     <image>
+                        <Image url="@../images/red_totem.png" />
+                     </image>
+                     <effect>
+                        <DropShadow>
+                           <color>
+                              <Color opacity="0.3664121925830841" />
+                           </color>
+                        </DropShadow>
+                     </effect>
+                  </ImageView>
+                  <ImageView fx:id="totem_WHITE" fitHeight="80.0" fitWidth="63.0" pickOnBounds="true" preserveRatio="true">
+                     <image>
+                        <Image url="@../images/white_totem.png" />
+                     </image>
+                     <effect>
+                        <DropShadow>
+                           <color>
+                              <Color opacity="0.38676849007606506" />
+                           </color>
+                        </DropShadow>
+                     </effect>
+                  </ImageView>
+                  <ImageView fx:id="totem_YELLOW" fitHeight="80.0" fitWidth="56.0" pickOnBounds="true" preserveRatio="true">
+                     <image>
+                        <Image url="@../images/yellow_totem.png" />
+                     </image>
+                     <effect>
+                        <DropShadow>
+                           <color>
+                              <Color opacity="0.3180661201477051" />
+                           </color>
+                        </DropShadow>
+                     </effect>
+                  </ImageView>
+               </children>
+            </HBox>
+            <Button fx:id="continueButton" mnemonicParsing="false" prefHeight="0.0" prefWidth="96.0" style="-fx-background-color: #EB5E28; -fx-background-radius: 10; -fx-border-color: #7B3C1F; -fx-border-radius: 10;" text="Continue" textFill="#fff3d8">
+               <font>
+                  <Font name="Tempus Sans ITC" size="14.0" />
+               </font>
+               <effect>
+                  <DropShadow>
+                     <color>
+                        <Color opacity="0.2977098822593689" />
+                     </color>
+                  </DropShadow>
+               </effect>
+            </Button>
+         </children>
+      </VBox>
+      <Button layoutX="15.0" layoutY="16.0" mnemonicParsing="false" onAction="#onCloseClicked" style="-fx-background-color: #D85F2Bff; -fx-background-radius: 10; -fx-border-radius: 10; -fx-border-width: 1; -fx-border-color: #7B3C1F;" text="Close" textFill="#fff3d8">
+         <font>
+            <Font name="Tempus Sans ITC" size="10.0" />
+         </font>
+         <effect>
+            <DropShadow>
+               <color>
+                  <Color opacity="0.3104325234889984" />
+               </color>
+            </DropShadow>
+         </effect>
+      </Button>
+   </children>
+</AnchorPane>
