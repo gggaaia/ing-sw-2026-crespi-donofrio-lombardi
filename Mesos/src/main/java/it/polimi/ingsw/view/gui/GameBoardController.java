@@ -31,6 +31,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
+import static it.polimi.ingsw.common.dto.Phase.*;
+
 /**
  * Main JavaFX Controller for the Game Board GUI.
  * This class is responsible for rendering the entire game state (cards, tracks, player boards)
@@ -83,7 +85,16 @@ public class GameBoardController {
             try {
                 // Update phase label only if there are no active user prompts
                 if (phaseLabel != null && !isOfferingPromptActive && !isCardPromptActive && !isSingleCardPromptActive) {
-                    phaseLabel.setText(state.getCurrentPhase() + " | Active Player: " + state.getCurrentPlayer());
+                    String friendlyPhase = getPhaseDescription(state.getCurrentPhase());
+                    String activePlayer = state.getCurrentPlayer();
+
+                    // Mostriamo il nome del giocatore attivo solo se è il turno di qualcuno
+                    if (activePlayer != null && !activePlayer.isEmpty()) {
+                        phaseLabel.setText(friendlyPhase + " | Active Player: " + activePlayer);
+                    } else {
+                        phaseLabel.setText(friendlyPhase);
+                    }
+
                     phaseLabel.setTextFill(Color.web("#EFE4CB"));
                 }
 
@@ -875,5 +886,28 @@ public class GameBoardController {
             box.getChildren().add(lbl);
         }
         return box;
+    }
+    /**
+     * Translates the raw game Phase object into a string for the UI banner.
+     *
+     * @param phase The current phase of the match.
+     * @return A readable description of what is happening.
+     */
+    private String getPhaseDescription(it.polimi.ingsw.common.dto.Phase phase) {
+        if (phase == null) return "Waiting...";
+
+        if (phase instanceof it.polimi.ingsw.common.dto.Phase.WaitingForNickname) return "Waiting for players to connect";
+        if (phase instanceof it.polimi.ingsw.common.dto.Phase.WaitingForPlayerCount) return "Waiting for lobby size selection";
+        if (phase instanceof it.polimi.ingsw.common.dto.Phase.WaitingForPlayers) return "Waiting for players to join";
+        if (phase instanceof it.polimi.ingsw.common.dto.Phase.ColorPicking) return "Picking totem colors";
+        if (phase instanceof it.polimi.ingsw.common.dto.Phase.PickOfferingTile) return "Placing totems on the Offering Track";
+        if (phase instanceof it.polimi.ingsw.common.dto.Phase.TurnPickCardsCharacter) return "Drawing Character and Event cards";
+        if (phase instanceof it.polimi.ingsw.common.dto.Phase.TurnPickCardsBuilding) return "Constructing Building cards";
+        if (phase instanceof it.polimi.ingsw.common.dto.Phase.ResetTurnOrderAndPickExtraBuilding) return "Choosing a bonus extra card";
+        if (phase instanceof it.polimi.ingsw.common.dto.Phase.ResolveBuildingsAndEvents) return "Resolving round effects...";
+        if (phase instanceof it.polimi.ingsw.common.dto.Phase.PausedWaitingReconnect) return "Match paused (Waiting for reconnect)";
+        if (phase instanceof it.polimi.ingsw.common.dto.Phase.GameEnded) return "Match is Over";
+
+        return "Waiting...";
     }
 }
