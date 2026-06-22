@@ -126,7 +126,7 @@ public class TuiView implements View {
             Map<String, Integer> global = state.getGlobalLeaderboard();
             if (global != null && !global.isEmpty()) {
                 String myName = state.getMyNickname();
-                int playerCount = state.getJoinedPlayers().size();
+                int playerCount = state.getExpectedPlayers();
 
                 sb.append(TuiPrinter.formatGlobalLeaderboard(global, myName, playerCount)).append(nl);
             }

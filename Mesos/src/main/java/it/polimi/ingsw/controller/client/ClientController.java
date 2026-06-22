@@ -225,7 +225,7 @@ public class ClientController {
     public synchronized List<String> getFinalLeaderboard()            { return finalLeaderboard == null ? null : new ArrayList<>(finalLeaderboard); }
     /** @return A copy of the final winners list, or null if the game hasn't ended. */
     public synchronized List<String> getFinalWinners()                { return finalWinners == null ? null : new ArrayList<>(finalWinners); }
-    public synchronized Map<String, Integer> getGlobalLeaderboard()        { return new HashMap<>(globalLeaderboard); }
+    public synchronized Map<String, Integer> getGlobalLeaderboard()        { return new LinkedHashMap<>(globalLeaderboard); }
 
     // ====================================================================
     // Event handlers (called by Rmi_Client / Socket_Client).
