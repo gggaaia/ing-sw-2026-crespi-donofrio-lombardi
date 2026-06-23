@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.ScrollPane?>
 <?import javafx.scene.image.Image?>
@@ -80,15 +81,28 @@
             <top>
                 <VBox spacing="10.0" BorderPane.alignment="CENTER">
                     <children>
-                        <HBox alignment="CENTER" prefHeight="40.0" prefWidth="80.0" spacing="10.0" style="-fx-background-color: #D85F2Bff;">
-                            <children>
-                                <ImageView fitHeight="30.0" fitWidth="153.0" pickOnBounds="true" preserveRatio="true">
+
+                        <!-- BARRA SUPERIORE CON BOTTONE A SINISTRA E LOGO AL CENTRO -->
+                        <BorderPane prefHeight="40.0" style="-fx-background-color: #D85F2Bff;">
+                            <padding>
+                                <Insets bottom="5.0" left="20.0" right="20.0" top="5.0" />
+                            </padding>
+                            <left>
+                                <Button fx:id="leaveMatchBtn" mnemonicParsing="false" onAction="#onLeaveMatchClicked" style="-fx-background-color: #c0392b; -fx-text-fill: white; -fx-font-family: 'Tempus Sans ITC'; -fx-font-weight: bold; -fx-cursor: hand; -fx-background-radius: 10;" text="LEAVE MATCH" BorderPane.alignment="CENTER" />
+                            </left>
+                            <center>
+                                <ImageView fitHeight="30.0" fitWidth="153.0" pickOnBounds="true" preserveRatio="true" BorderPane.alignment="CENTER">
                                     <image>
                                         <Image url="@../images/logo.png" />
                                     </image>
                                 </ImageView>
-                            </children>
-                        </HBox>
+                            </center>
+                            <!-- Aggiungiamo un segnaposto a destra della stessa larghezza del bottone per mantenere il logo perfettamente centrato -->
+                            <right>
+                                <HBox prefWidth="120.0" BorderPane.alignment="CENTER" />
+                            </right>
+                        </BorderPane>
+
                         <HBox alignment="CENTER" prefHeight="30.0" prefWidth="200.0" style="-fx-background-color: #D85F2Bff; -fx-background-radius: 20;">
                             <children>
                                 <Label fx:id="phaseLabel" alignment="CENTER" style="-fx-background-color: #D85F2Bff;" text="Label" textFill="#efe4cb">

@@ -51,8 +51,9 @@ public class GameBoardController {
     @FXML private HBox offeringTrackBox;
     @FXML private HBox decksBox;
     @FXML private Label phaseLabel;
+    @FXML private Button leaveMatchBtn;
 
-    // --- Interaction Memory State ---
+// --- Interaction Memory State ---
     /* We use CompletableFuture to bridge the gap between the asynchronous,
      * event-driven nature of JavaFX (mouse clicks) and the synchronous request/response
      * flow of the game network protocol. These variables store the current prompt state.
@@ -82,7 +83,7 @@ public class GameBoardController {
     public void updateBoard(ClientController state) {
         Platform.runLater(() -> {
             try {
-                // Update phase label only if there are no active user prompts
+// Update phase label only if there are no active user prompts
                 if (phaseLabel != null && !isOfferingPromptActive && !isCardPromptActive && !isSingleCardPromptActive) {
                     String friendlyPhase = getPhaseDescription(state.getCurrentPhase());
                     String activePlayer = state.getCurrentPlayer();
@@ -107,7 +108,7 @@ public class GameBoardController {
                     updateDecks(state.getCurrentEra());
                 }
 
-                // Re-apply visual cues if a prompt was active during the refresh
+// Re-apply visual cues if a prompt was active during the refresh
                 if (isOfferingPromptActive) applyOfferingTileSelectionVisuals();
                 if (isCardPromptActive) applyCardSelectionVisuals();
                 if (isSingleCardPromptActive) applySingleCardSelectionVisuals();
@@ -119,13 +120,24 @@ public class GameBoardController {
     }
 
     /**
+     * Initializes the controller class. Automatically called by JavaFX.
+     * Sets up the hover effects for the board buttons.
+     */
+    @FXML
+    public void initialize() {
+        if (leaveMatchBtn != null) {
+            addHoverEffect(leaveMatchBtn);
+        }
+    }
+
+    /**
      * Renders the deck placeholders on the board dynamically based on the current Era.
      */
     private void updateDecks(it.polimi.ingsw.model.enums.Era currentEra) {
         if (decksBox == null) return;
         decksBox.getChildren().clear();
 
-        // Default backs for ERA_1
+// Default backs for ERA_1
         String tribeBack = "back_0";
         String buildingBack = "back_96";
 
@@ -148,7 +160,7 @@ public class GameBoardController {
             }
         }
 
-        // Add both decks with their respective dynamic backs
+// Add both decks with their respective dynamic backs
         decksBox.getChildren().add(createDeckNode(tribeBack));
         decksBox.getChildren().add(createDeckNode(buildingBack));
     }
@@ -202,7 +214,7 @@ public class GameBoardController {
         leftOpponentsBox.getChildren().clear();
         rightOpponentsBox.getChildren().clear();
 
-        // Keep the action buttons if present during a UI refresh to avoid losing prompt interactions
+// Keep the action buttons if present during a UI refresh to avoid losing prompt interactions
         javafx.scene.Node actionBox = null;
         for (javafx.scene.Node n : myStatusBox.getChildren()) {
             if ("actionButtonsBox".equals(n.getId()) || "confirmSelectionBtn".equals(n.getId())) {
@@ -213,7 +225,7 @@ public class GameBoardController {
         myStatusBox.getChildren().clear();
         myStatusBox.setStyle("-fx-background-color: transparent;");
 
-        // --- MATCH INFORMATION BOX ---
+// --- MATCH INFORMATION BOX ---
         VBox gameInfoBox = new VBox(8);
         gameInfoBox.setStyle("-fx-background-color: #562A2Cff; -fx-border-color: #EFE4CB; -fx-border-width: 2; -fx-border-radius: 5; -fx-padding: 10;");
         String eraStr = (state.getCurrentEra() != null) ? state.getCurrentEra().name().replace("ERA_", "") : "1";
@@ -239,22 +251,22 @@ public class GameBoardController {
             int pp = (state.getPrestige() != null && state.getPrestige().containsKey(p)) ? state.getPrestige().get(p) : 0;
             int f = (state.getFood() != null && state.getFood().containsKey(p)) ? state.getFood().get(p) : 0;
 
-            // COUNTER CALCULATIONS
+// COUNTER CALCULATIONS
             int numArtist = 0, numShaman = 0, numBuilder = 0, numGatherer = 0, numHunter = 0, numInventor = 0;
 
-            // Extra derived metrics
+// Extra derived metrics
             int extraStars = 0;
             int farmerDiscount = 0;
             int buildingDiscount = 0;
             int peopleToFeed = 0;
             int inventorIcons = 0;
 
-            // Set to count unique Inventor icons
+// Set to count unique Inventor icons
             java.util.Set<it.polimi.ingsw.model.enums.InventorIcon> distinctInventorIcons = new java.util.HashSet<>();
 
             if (state.getHandsByPlayer() != null && state.getHandsByPlayer().containsKey(p)) {
                 List<CharacterCard> hand = state.getHandsByPlayer().get(p);
-                // Sustenance: The number of people to feed is the total number of character cards
+// Sustenance: The number of people to feed is the total number of character cards
                 peopleToFeed = hand.size();
 
                 for (CharacterCard c : hand) {
@@ -278,11 +290,11 @@ public class GameBoardController {
                 }
             }
 
-            // Calculations automatically deduced from characters in hand
+// Calculations automatically deduced from characters in hand
             inventorIcons = distinctInventorIcons.size();
             farmerDiscount = numGatherer; // Base sustenance discount is equal to the number of Gatherers
 
-            // Apply modifiers provided by constructed Buildings
+// Apply modifiers provided by constructed Buildings
             if (state.getBuildingsByPlayer() != null && state.getBuildingsByPlayer().containsKey(p)) {
                 for (BuildingCard b : state.getBuildingsByPlayer().get(p)) {
                     if (b instanceof it.polimi.ingsw.model.card.building.RitualStarBonus) {
@@ -302,8 +314,8 @@ public class GameBoardController {
 
             String hexColor = toHexString(getJavaFXColor(color));
 
-            // --- BUILD STAT ROWS ---
-            // ROW 1: Food | People to feed | Farmer Discount
+// --- BUILD STAT ROWS ---
+// ROW 1: Food | People to feed | Farmer Discount
             HBox row1 = new HBox(15);
             row1.getChildren().addAll(
                     createIconStat("Food_icon.png", f, 22, "FOOD", "Current food resources. \nFood can be used to feed your tribe and to buy buildings. \nDuring Sustenance events you will lose PP if you don't have enough food to feed your tribe."),
@@ -311,7 +323,7 @@ public class GameBoardController {
                     createIconStat("Farmer_discount_icon.png", farmerDiscount, 22, "DISCOUNT", "Sustenance reduction.Includes the Gatherers' discount and any additional bonus provided by buildings.")
             );
 
-            // ROW 2: Stars | Building Discount | Inventor Icons
+// ROW 2: Stars | Building Discount | Inventor Icons
             HBox row2 = new HBox(15);
             row2.getChildren().addAll(
                     createIconStat("Shaman_stars_icon.png", extraStars, 22, "STARS","The total number of Star icons on Shaman and Building cards. " +
@@ -320,7 +332,7 @@ public class GameBoardController {
                     createIconStat("Inventor_icon.png", inventorIcons, 22, "INVENTION ICONS","The total number of different invention icons among Invention cards. \nAt the end of the game, you will get Prestige Points equal to the number of different Inventions \nmultiplied by the number of Invention cards owned. ")
             );
 
-            // ROW 3: Characters (Artists, Builders, Gatherers)
+// ROW 3: Characters (Artists, Builders, Gatherers)
             HBox row3 = new HBox(15);
             row3.getChildren().addAll(
                     createIconStat("Artist_icon.png", numArtist, 22, "ARTISTS","Total number of artists in your tribe "),
@@ -328,16 +340,16 @@ public class GameBoardController {
                     createIconStat("Farmer_icon.png", numGatherer, 22, "GATHERERS","Total number of gatherers in your tribe ")
             );
 
-            // ROW 4: Characters (Hunters, Inventors, Shamans)
+// ROW 4: Characters (Hunters, Inventors, Shamans)
             HBox row4 = new HBox(15);
             row4.getChildren().addAll(
                     createIconStat("Hunter_icon.png", numHunter, 22, "HUNTERS","Total number of hunters in your tribe "),
                     createIconStat("Inventor_icon.png", numInventor, 22, "INVENTORS","Total number of inventors in your tribe "),
                     createIconStat("Shaman_icon.png", numShaman, 22, "SHAMANS","Total number of shamans in your tribe  ")
             );
-            // --- POPULATE PLAYER PANELS ---
+// --- POPULATE PLAYER PANELS ---
             if (p.equals(myName)) {
-                // Main player panel (Bottom)
+// Main player panel (Bottom)
                 myStatusBox.setStyle("-fx-background-color: #562A2Cff; -fx-border-color: " + hexColor + "; -fx-border-width: 3; -fx-border-radius: 10; -fx-background-radius: 10; -fx-padding: 10;");
                 myStatusBox.setSpacing(15);
 
@@ -347,12 +359,12 @@ public class GameBoardController {
                 nameLbl.setFont(Font.font("Tempus Sans ITC", FontWeight.BOLD, 18));
                 nameLbl.setTextFill(getJavaFXColor(color));
 
-                // Prestige Points: displayed only textually below the name
+// Prestige Points: displayed only textually below the name
                 Label ppLbl = new Label("Prestige: " + pp);
                 ppLbl.setTextFill(Color.GOLD); ppLbl.setFont(Font.font("Tempus Sans ITC", FontWeight.BOLD, 14));
                 nameBox.getChildren().addAll(nameLbl, ppLbl);
 
-                // Insert vertical separators between rows for cleaner UX
+// Insert vertical separators between rows for cleaner UX
                 myStatusBox.getChildren().addAll(
                         nameBox,
                         createSeparator(true), row1,
@@ -363,7 +375,7 @@ public class GameBoardController {
                 if (actionBox != null) myStatusBox.getChildren().add(actionBox);
 
             } else {
-                // Opponents panels (Left/Right)
+// Opponents panels (Left/Right)
                 VBox oppBox = new VBox(8);
                 oppBox.setStyle("-fx-background-color: #562A2Cff; -fx-border-color: " + hexColor + "; -fx-border-width: 2; -fx-border-radius: 5; -fx-padding: 10;");
 
@@ -384,7 +396,7 @@ public class GameBoardController {
                     nameLbl.setTextFill(Color.web("#bdc3c7"));
                 }
 
-                // Insert horizontal separators
+// Insert horizontal separators
                 oppBox.getChildren().addAll(
                         topRow,
                         createSeparator(false), row1,
@@ -441,7 +453,7 @@ public class GameBoardController {
         StackPane pane = new StackPane();
         pane.setPrefSize(100, 140);
 
-        // Metadata required for interaction prompts
+// Metadata required for interaction prompts
         pane.getProperties().put("cardId", c.getCardID());
         String typeStr = (c instanceof CharacterCard) ? "CHARACTER" : (c instanceof BuildingCard ? "BUILDING" : "EVENT");
         pane.getProperties().put("cardType", typeStr);
@@ -489,12 +501,12 @@ public class GameBoardController {
         int numPlayers = slots.length;
         int fileIndex = numPlayers - 1; // 1 = 2p, 2 = 3p, etc.
 
-        // Base dimensions for the card background and individual totems
-        // (Totem dimensions rely on getTotemImageView which fixes bounds to 40x40)
+// Base dimensions for the card background and individual totems
+// (Totem dimensions rely on getTotemImageView which fixes bounds to 40x40)
         double cardW = 80, cardH = 140, totemW = 40, totemH = 40;
 
-        // Pre-calculated vertical centers (in pixels).
-        // The array index maps directly to the calculated fileIndex.
+// Pre-calculated vertical centers (in pixels).
+// The array index maps directly to the calculated fileIndex.
         double[][] yCenters = {
                 {},                    // Index 0 (1 player, unused)
                 {29, 55},              // Index 1 (corresponds to 2 players)
@@ -506,7 +518,7 @@ public class GameBoardController {
         StackPane tilePane = new StackPane();
         tilePane.setPrefSize(cardW, cardH);
 
-        // 1. Load the background image of the Turn Order Tile
+// 1. Load the background image of the Turn Order Tile
         try {
             String path = "/images/cards/orderCards/turnorderslot_" + fileIndex + ".png";
             Image img = new Image(getClass().getResourceAsStream(path));
@@ -515,7 +527,7 @@ public class GameBoardController {
             bgImage.setFitWidth(cardW);
             bgImage.setFitHeight(cardH);
 
-            // Force the ImageView to exactly fill the 80x140 bounds to align with coordinates
+// Force the ImageView to exactly fill the 80x140 bounds to align with coordinates
             bgImage.setPreserveRatio(false);
             tilePane.getChildren().add(bgImage);
         } catch (Exception e) {
@@ -523,20 +535,20 @@ public class GameBoardController {
             tilePane.getChildren().add(rect);
         }
 
-        // 2. Create a transparent overlay Pane to handle absolute coordinates for the Totems
+// 2. Create a transparent overlay Pane to handle absolute coordinates for the Totems
         Pane totemsOverlay = new Pane();
         totemsOverlay.setPrefSize(cardW, cardH);
 
         double[] yPos = yCenters[fileIndex];
 
-        // 3. Position the totems
+// 3. Position the totems
         for (int i = 0; i < numPlayers; i++) {
             TurnOrderSlot s = slots[i];
 
             if (s.isOccupied()) {
                 ImageView totemImg = getTotemImageView(s.getTotemColor());
                 if (totemImg != null) {
-                    // Set exact X and Y coordinates centered on the calculated markers
+// Set exact X and Y coordinates centered on the calculated markers
                     totemImg.setLayoutX((cardW - totemW) / 2.0);
                     totemImg.setLayoutY(yPos[i] - totemH / 2.0);
 
@@ -560,18 +572,18 @@ public class GameBoardController {
         offeringTrackBox.getChildren().clear();
         if (track == null) return;
 
-        // Fixed dimensions for Offering Tiles and Totems
+// Fixed dimensions for Offering Tiles and Totems
         double cardW = 100, cardH = 140;
         double totemW = 40, totemH = 40;
 
-        // Center point on the Y-axis for the white box.
+// Center point on the Y-axis for the white box.
         double whiteBoxCenterY = 30.0;
 
         for (OfferingTile t : track) {
             StackPane tilePane = new StackPane();
             tilePane.setPrefSize(cardW, cardH);
 
-            // 1. Load the background image of the Offering Tile
+// 1. Load the background image of the Offering Tile
             try {
                 String path = "/images/cards/offerTile/offertile_" + t.getLetter() + ".png";
                 Image img = new Image(getClass().getResourceAsStream(path));
@@ -580,7 +592,7 @@ public class GameBoardController {
                 bgImage.setFitWidth(cardW);
                 bgImage.setFitHeight(cardH);
 
-                // Force the image to exactly fill the 100x140 bounds
+// Force the image to exactly fill the 100x140 bounds
                 bgImage.setPreserveRatio(false);
                 tilePane.getChildren().add(bgImage);
             } catch (Exception e) {
@@ -588,17 +600,17 @@ public class GameBoardController {
                 tilePane.getChildren().add(rect);
             }
 
-            // 2. Create a transparent overlay Pane for absolute Totem coordinates
+// 2. Create a transparent overlay Pane for absolute Totem coordinates
             Pane totemOverlay = new Pane();
             totemOverlay.setPrefSize(cardW, cardH);
 
-            // 3. If the tile is occupied, calculate coordinates and position the totem
+// 3. If the tile is occupied, calculate coordinates and position the totem
             if (t.isOccupied()) {
                 ImageView totemImg = getTotemImageView(t.getCurrentTotemColor());
                 if (totemImg != null) {
-                    // Align to the center on the X-axis
+// Align to the center on the X-axis
                     totemImg.setLayoutX((cardW - totemW) / 2.0);
-                    // Align using the calculated Y center for the white box
+// Align using the calculated Y center for the white box
                     totemImg.setLayoutY(whiteBoxCenterY - (totemH / 2.0));
 
                     totemOverlay.getChildren().add(totemImg);
@@ -676,6 +688,7 @@ public class GameBoardController {
         if (phaseLabel != null) {
             String hint = "CHARACTER".equals(activeCardTargetType) ?
                     " (Click Skip to save picks for Buildings)." : " (Click Skip to pass).";
+            phaseLabel.setText("YOUR TURN! Select " + activeCardTargetType + " from " + activeCardRowName + " ROW (Max " + activeCardBudget + ")" + hint);
             String instruction;
             if (activeCardBudget > 1) {
                 instruction = "YOUR TURN! Select up to " + activeCardBudget + " " + activeCardTargetType + "S, THEN click CONFIRM" + hint;
@@ -689,15 +702,16 @@ public class GameBoardController {
 
         HBox targetBox = activeCardRowName.equals("UPPER") ? upperRowBox : lowerRowBox;
         if (targetBox == null) return;
+
         if (myStatusBox != null) {
-            // Remove previous instances of the buttons to avoid duplication
+// Remove previous instances of the buttons to avoid duplication
             myStatusBox.getChildren().removeIf(n -> "actionButtonsBox".equals(n.getId()) || "confirmSelectionBtn".equals(n.getId()));
 
             HBox actionButtonsBox = new HBox(15);
             actionButtonsBox.setId("actionButtonsBox");
             actionButtonsBox.setAlignment(Pos.CENTER);
 
-            // Skip Button: Immediately completes the future with an empty list
+// Skip Button: Immediately completes the future with an empty list
             Button skipBtn = new Button("SKIP");
             skipBtn.setStyle("-fx-background-color: #c0392b; -fx-text-fill: white; -fx-font-family: 'Tempus Sans ITC'; -fx-font-weight: bold; -fx-font-size: 14; -fx-cursor: hand;");
             skipBtn.setOnAction(e -> {
@@ -706,7 +720,7 @@ public class GameBoardController {
                 if (f != null) f.complete(new ArrayList<>());
             });
 
-            // Confirm Button: Disabled initially, enabled via updateButtonsState.run()
+// Confirm Button: Disabled initially, enabled via updateButtonsState.run()
             Button confirmBtn = new Button("CONFIRM SELECTION");
             confirmBtn.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white; -fx-font-family: 'Tempus Sans ITC'; -fx-font-weight: bold; -fx-font-size: 14; -fx-cursor: hand;");
             confirmBtn.setDisable(true);
@@ -720,7 +734,7 @@ public class GameBoardController {
             actionButtonsBox.getChildren().addAll(skipBtn, confirmBtn);
             myStatusBox.getChildren().add(actionButtonsBox);
 
-            // Helper lambda to toggle button state based on selection size
+// Helper lambda to toggle button state based on selection size
             Runnable updateButtonsState = () -> {
                 confirmBtn.setDisable(currentSelectedCardIds.isEmpty());
             };
@@ -740,7 +754,7 @@ public class GameBoardController {
                             currentSelectedCardIds.remove((Integer) cardId);
                             node.setStyle("-fx-cursor: hand; -fx-effect: dropshadow(three-pass-box, rgba(255,255,255,0.5), 10, 0, 0, 0);");
                         } else {
-                            // Enforce budget limits visually
+// Enforce budget limits visually
                             if (currentSelectedCardIds.size() < activeCardBudget) {
                                 currentSelectedCardIds.add(cardId);
                                 node.setStyle("-fx-cursor: hand; -fx-effect: dropshadow(three-pass-box, #00ff00, 20, 0, 0, 0);");
@@ -865,16 +879,16 @@ public class GameBoardController {
         return String.format("#%02X%02X%02X", (int)(color.getRed()*255), (int)(color.getGreen()*255), (int)(color.getBlue()*255));
     }
 
-    /**
-     * Creates a standardized UI element pairing a graphical icon with a numerical value.
-     * Falls back to text-only rendering if the icon image file is not found.
-     *
-     * @param iconName The filename of the icon (must reside in /images/icons/).
-     * @param value The numerical statistic to display.
-     * @param iconSize The squared size constraint for the icon.
-     * @param tooltipText The descriptive text to show on mouse hover.
-     * @return An HBox containing the formatted icon and text.
-     */
+/**
+ * Creates a standardized UI element pairing a graphical icon with a numerical value.
+ * Falls back to text-only rendering if the icon image file is not found.
+ *
+ * @param iconName The filename of the icon (must reside in /images/icons/).
+ * @param value The numerical statistic to display.
+ * @param iconSize The squared size constraint for the icon.
+ * @param tooltipText The descriptive text to show on mouse hover.
+ * @return An HBox containing the formatted icon and text.
+ */
     /**
      * Creates a standardized UI element pairing a graphical icon with a numerical value.
      * Includes a tooltip with a bold title and a description.
@@ -890,18 +904,18 @@ public class GameBoardController {
         box.setAlignment(Pos.CENTER_LEFT);
         box.setPickOnBounds(true);
 
-        // Install a Tooltip with title and description if provided
+// Install a Tooltip with title and description if provided
         if (title != null && description != null) {
-            // Combine title and description with a newline, no separator line used
+// Combine title and description with a newline, no separator line used
             String tooltipContent = title.toUpperCase() + "\n" + description;
 
             javafx.scene.control.Tooltip tooltip = new javafx.scene.control.Tooltip(tooltipContent);
             tooltip.setFont(Font.font("Tempus Sans ITC", FontWeight.BOLD, 14));
 
-            // Custom styling as requested
+// Custom styling as requested
             tooltip.setStyle("-fx-background-color: #4B1419ff; -fx-text-fill: #EFE4CBff; -fx-border-color: #EFE4CBff; -fx-border-width: 1px;");
 
-            // Show the tooltip almost instantly
+// Show the tooltip almost instantly
             tooltip.setShowDelay(javafx.util.Duration.seconds(0.05));
             javafx.scene.control.Tooltip.install(box, tooltip);
         }
@@ -922,7 +936,7 @@ public class GameBoardController {
 
             box.getChildren().addAll(icon, lbl);
         } catch (Exception e) {
-            // Fallback to text-only if the icon fails to load
+// Fallback to text-only if the icon fails to load
             String cleanName = iconName.split("\\.")[0].toUpperCase();
             Label lbl = new Label(cleanName + ": " + value);
             lbl.setTextFill(Color.WHITE);
@@ -953,4 +967,32 @@ public class GameBoardController {
 
         return "Waiting...";
     }
+    /**
+     * Adds a scaling and glowing hover effect to the specified button.
+     *
+     * @param btn The button to apply the hover effect to.
+     */
+    private void addHoverEffect(Button btn) {
+        javafx.scene.effect.DropShadow glow = new javafx.scene.effect.DropShadow();
+        glow.setColor(Color.web("#FFFFAA"));
+        glow.setRadius(15);
+        glow.setSpread(0.4);
+
+        btn.setOnMouseEntered(e -> {
+            btn.setScaleX(1.05);
+            btn.setScaleY(1.05);
+            btn.setEffect(glow);
+        });
+
+        btn.setOnMouseExited(e -> {
+            btn.setScaleX(1.0);
+            btn.setScaleY(1.0);
+            btn.setEffect(null);
+        });
+    }
+    @FXML
+    public void onLeaveMatchClicked() {
+        GuiView.abortLobbyAndDisconnect();
+    }
+
 }

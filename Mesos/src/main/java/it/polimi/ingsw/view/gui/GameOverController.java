@@ -16,23 +16,27 @@ import javafx.scene.text.FontWeight;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Controller for the Game Over screen in the GUI.
+ * Manages the display of the final match results, including the winner(s)
+ * and the complete leaderboard of the current match. Also provides navigation
+ * to the global leaderboard and a safe exit from the application.
+ */
 public class GameOverController {
 
     @FXML private Label winnerLabel;
     @FXML private VBox matchLeaderboardBox;
     @FXML private Button viewGlobalBtn;
-    @FXML private Button backToWelcomeBtn;
     @FXML private Button exitGameBtn;
 
+    /**
+     * Initializes the controller class. This method is automatically called
+     * after the FXML file has been loaded.
+     * Sets up the style and event handlers for the navigation and exit buttons.
+     */
     @FXML
     public void initialize() {
         String btnStyle = "-fx-text-fill: #EFE4CB; -fx-font-family: 'Tempus Sans ITC'; -fx-font-weight: bold; -fx-font-size: 14; -fx-cursor: hand; -fx-background-radius: 20;";
-
-        if (backToWelcomeBtn != null) {
-            backToWelcomeBtn.setOnAction(e -> GuiView.abortLobbyAndDisconnect());
-            backToWelcomeBtn.setStyle("-fx-background-color: #EB5E28; " + btnStyle);
-            addHoverEffect(backToWelcomeBtn);
-        }
 
         if (exitGameBtn != null) {
             exitGameBtn.setOnAction(e -> {
@@ -50,6 +54,11 @@ public class GameOverController {
         }
     }
 
+    /**
+     * Adds a scaling and glowing hover effect to the specified button.
+     *
+     * @param btn The button to apply the hover effect to.
+     */
     private void addHoverEffect(Button btn) {
         DropShadow glow = new DropShadow();
         glow.setColor(Color.web("#FFFFAA"));
@@ -69,11 +78,17 @@ public class GameOverController {
         });
     }
 
+    /**
+     * Populates the match results UI with the data from the completed game.
+     * Displays the winner(s) and lists all players with their final prestige points.
+     *
+     * @param state The client controller containing the final match state.
+     */
     public void updateMatchResults(ClientController state) {
-        System.out.println("LOG: Caricamento dati schermata Game Over in corso...");
+        System.out.println("LOG: Loading Game Over screen data...");
 
         if (matchLeaderboardBox == null) {
-            System.err.println("ERRORE GRAFICA: matchLeaderboardBox e' NULL! Controlla di aver impostato correttamente fx:id=\"matchLeaderboardBox\" su SceneBuilder.");
+            System.err.println("GRAPHIC ERROR: matchLeaderboardBox is NULL! Check if fx:id=\"matchLeaderboardBox\" is set correctly in SceneBuilder.");
         }
 
         if (matchLeaderboardBox != null) {
@@ -84,8 +99,8 @@ public class GameOverController {
         List<String> leaderboard = state.getFinalLeaderboard();
         Map<String, Integer> prestige = state.getPrestige();
 
-        System.out.println("LOG: Vincitori ricevuti -> " + winners);
-        System.out.println("LOG: Classifica ricevuta -> " + leaderboard);
+        System.out.println("LOG: Winners received -> " + winners);
+        System.out.println("LOG: Leaderboard received -> " + leaderboard);
 
         if (winnerLabel != null) {
             if (winners != null && !winners.isEmpty()) {
