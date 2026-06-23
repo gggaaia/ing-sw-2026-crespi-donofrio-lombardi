@@ -288,8 +288,8 @@ public class Server {
         acceptorThread.start();
     }
 
-    private static final int DEFAULT_RMI_PORT = 1234;
-    private static final int DEFAULT_SOCKET_PORT = 8080;
+    private static final int DEFAULT_RMI_PORT = 52345;
+    private static final int DEFAULT_SOCKET_PORT = 52346;
 
     public static void main(String[] args) throws Exception {
         int rmiPort = args.length > 0 ? Integer.parseInt(args[0]) : DEFAULT_RMI_PORT;

@@ -18,8 +18,8 @@ import java.util.concurrent.CountDownLatch;
 public class Client {
 
     private static final String DEFAULT_HOST = "localhost";
-    private static final int DEFAULT_RMI_PORT = 1234;
-    private static final int DEFAULT_SOCKET_PORT = 8080;
+    private static final int DEFAULT_RMI_PORT = 52345;
+    private static final int DEFAULT_SOCKET_PORT = 52346;
 
     public static void main(String[] args) throws Exception {
         Scanner scan = new Scanner(System.in);

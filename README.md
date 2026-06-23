@@ -43,7 +43,7 @@ Run the commands below from the `Mesos/target/` directory (or prefix the JAR nam
 
 #### Server
 
-The server has no arguments and listens on the default ports (RMI `1234`, Socket `8080`):
+The server has no arguments and listens on the default ports (RMI `52345`, Socket `52346`):
 
 ```
 java -jar mesos-server.jar
