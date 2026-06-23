@@ -39,26 +39,31 @@ The compiled JARs are placed in the `Mesos/target/` directory:
 
 ### How to Run the Project From JARs
 
-Run the commands below from the `Mesos/target/` directory (or prefix the JAR names with their path).
+The build produces the JARs in `Mesos/target/`.
 
 #### Server
 
-The server has no arguments and listens on the default ports (RMI `52345`, Socket `52346`):
+Run the server **from the `Mesos/` directory** (i.e. the project root that contains `config.properties`), pointing at the JAR under `target/`:
 
 ```
-java -jar mesos-server.jar
+cd Mesos
+java -jar target/mesos-server.jar
 ```
+
+It has no arguments and listens on the default ports (RMI `52345`, Socket `52346`).
+
+> **Why run it from `Mesos/` and not from `target/`?** The leaderboard reads the database credentials from `config.properties`, which the server looks for in the current working directory. That file lives in the `Mesos/` project root and is intentionally **git-ignored** (it holds the Supabase credentials), so it is not bundled in the JAR. Launching from `target/` makes the server unable to find it, and you get `[DB ERROR] ... config.properties` and an unavailable leaderboard (the rest of the game still works). Launching from `Mesos/` resolves the file. The file is not in the repository, so each machine that hosts the server must have its own `Mesos/config.properties`.
 
 #### Client
 
-The client takes the **server's IP address** as an optional first argument. With no argument it defaults to `localhost` (single-machine runs); on separate machines, pass the server's IP. The protocol (`socket`/`rmi`) and interface (`tui`/`gui`) are then chosen interactively at startup.
+The client does not need `config.properties`, so it can be launched from anywhere (e.g. from `Mesos/target/`, or with the path to the JAR). It takes the **server's IP address** as an optional first argument: with no argument it defaults to `localhost` (single-machine runs); on separate machines, pass the server's IP. The protocol (`socket`/`rmi`) and interface (`tui`/`gui`) are then chosen interactively at startup.
 
 ```
 # Same machine as the server (defaults to localhost)
-java -jar mesos-client.jar
+java -jar target/mesos-client.jar
 
 # Different machine: connect to the server's IP address
-java -jar mesos-client.jar 192.168.1.50
+java -jar target/mesos-client.jar 192.168.1.50
 ```
 
 Replace `192.168.1.50` with the actual LAN IP of the machine running the server.
