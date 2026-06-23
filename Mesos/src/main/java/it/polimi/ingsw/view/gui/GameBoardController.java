@@ -234,6 +234,7 @@ public class GameBoardController {
         int opponentCount = 0;
 
         for (String p : players) {
+            boolean isDisconnected = state.getDisconnectedPlayers().contains(p);
             TotemColor color = (state.getColorsByPlayer() != null) ? state.getColorsByPlayer().get(p) : null;
             int pp = (state.getPrestige() != null && state.getPrestige().containsKey(p)) ? state.getPrestige().get(p) : 0;
             int f = (state.getFood() != null && state.getFood().containsKey(p)) ? state.getFood().get(p) : 0;
@@ -375,6 +376,13 @@ public class GameBoardController {
                 Label ppLbl = new Label(pp + " PP");
                 ppLbl.setTextFill(Color.GOLD); ppLbl.setFont(Font.font("Tempus Sans ITC", FontWeight.BOLD, 12));
                 topRow.getChildren().addAll(nameLbl, ppLbl);
+
+                if (isDisconnected) {
+                    oppBox.setOpacity(0.5); //transparency
+                    oppBox.setStyle("-fx-background-color: #2c3e50; -fx-border-color: #7f8c8d; -fx-border-width: 2; -fx-border-radius: 5; -fx-padding: 10;"); // Lo fa diventare grigio spento
+                    nameLbl.setText(p + " (OFFLINE)");
+                    nameLbl.setTextFill(Color.web("#bdc3c7"));
+                }
 
                 // Insert horizontal separators
                 oppBox.getChildren().addAll(

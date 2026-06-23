@@ -68,6 +68,7 @@ public class ClientController {
     private List<String> finalLeaderboard;
     private List<String> finalWinners;
     private Map<String, Integer> globalLeaderboard;
+    private final Set<String> disconnectedPlayers = new HashSet<>();
 
     /**
      * Server-side error (e.g. "tile already occupied") waiting to be
@@ -655,8 +656,8 @@ public class ClientController {
      * @param nick The nickname of the disconnected player.
      */
     public synchronized void playerDisconnected(String nick) {
-        joinedPlayers.remove(nick);
-        pendingLogs.add(nick + " disconnected.");
+        disconnectedPlayers.add(nick);
+        pendingLogs.add("ATTENTION: " + nick + " has disconnected.");
     }
 
     /**
@@ -665,9 +666,9 @@ public class ClientController {
      * @param nick The nickname of the reconnected player.
      */
     public synchronized void playerReconnected(String nick) {
-        pendingLogs.add(nick + " reconnected.");
+        disconnectedPlayers.remove(nick);
+        pendingLogs.add("GOOD NEWS: " + nick + " has reconnected.");
     }
-
     /**
      * Queues an error notification to be displayed to the user when their
      * last action was rejected by the server logic.
@@ -942,5 +943,8 @@ public class ClientController {
             System.out.println("LOG: Reconnecting to server with new nickname: " + newNickname);
             retryConnect.run();
         }
+    }
+    public synchronized Set<String> getDisconnectedPlayers() {
+        return new HashSet<>(disconnectedPlayers);
     }
 }
