@@ -9,6 +9,5 @@ public class RitualSave extends EventActivatedBuilding {
     }
 
     @Override
-    //FIXME: watch out: player==null==getOwner()==null is possible, might want an Optional here
     public int checkRitualSafe(Player player){ return((player == getOwner() ? 0 : 1));}
 }
