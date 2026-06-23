@@ -93,7 +93,24 @@ public class ServerController {
     private List<Player> resolutionOrder = new ArrayList<>();
     private int currentResolutionIndex;
 
-    /** Budget for the current draw. */
+    /**
+     * How many cards the CURRENT resolution player may still take from each
+     * row. They start at the offering tile's grant (top -> upper, bottom ->
+     * lower) and shrink as cards are taken. The player should reach the
+     * granted count per row (characters + buildings combined), but buildings
+     * are OPTIONAL: only an available character card can force more picking.
+     * So when cards are still owed after a building pick AND the row still
+     * has a character to take, we re-open the pick with these reduced values
+     * instead of advancing (see {@link #acceptBuildingCardsPick} /
+     * {@link #repromptPickForRemaining}); a row with no character left is
+     * forgiven, so the player may finish below the granted count when the
+     * remainder could only come from a (optional) building.
+     *
+     * {@code currentUpper/LowerBudget} drive the character-pick prompt
+     * (what's left at the start of the pick); {@code ...RemainingForBuilding}
+     * drive the building-pick prompt (what's left after the characters just
+     * taken). On the first entry of a turn all four equal the tile's grant.
+     */
     private int currentUpperBudget;
     private int currentLowerBudget;
     private int currentUpperRemainingForBuilding;
@@ -950,11 +967,11 @@ public class ServerController {
         final List<BuildingCard> finalLower = foundLower;
         final Board boardAfterBuild = match.getBoard();
         final int newFood = player.getFood();
-        // NO commit: the next step (advanceResolver -> next
-        // character pick turn, or afterAllResolutionsDone -> extra
-        // pick / round end) closes the bundle with its own commit.
-        // This way we get ONE single screen showing the bought
-        // buildings + the new turn.
+        // NO commit: whatever comes next closes the bundle with its own
+        // commit (the re-prompt below, or advanceResolver -> next character
+        // pick turn, or afterAllResolutionsDone -> extra pick / round end).
+        // This way we get ONE single screen showing the bought buildings +
+        // whatever the player has to do next.
         broadcast(new ViewCall() {
             @Override public void apply(VirtualView v) throws RemoteException {
                 v.onBoardSnapshot(boardAfterBuild);
@@ -962,8 +979,90 @@ public class ServerController {
                 v.onFoodChanged(nick, newFood);
             }
         });
+
+        // RULE: the player should reach the exact number of cards their
+        // offering tile granted, counting the character pick AND the building
+        // pick together, per row. currentUpper/LowerRemainingForBuilding held
+        // how many were still owed when this building pick started; subtract
+        // what was just bought to get what is STILL owed.
+        int owedUpper = currentUpperRemainingForBuilding - upper.size();
+        int owedLower = currentLowerRemainingForBuilding - lower.size();
+
+        // Buildings are OPTIONAL: a player is never forced to buy one. Only an
+        // available CHARACTER card forces more picking. So we re-open the pick
+        // (character, then building) for the SAME player with the reduced
+        // budget when a row still owes cards AND still has a character to take.
+        // We re-offer BOTH rows' remaining count so the player keeps the free
+        // choice of filling with characters or (optionally) buildings; the
+        // loop only continues while some row still owes a character, which is
+        // also what guarantees it terminates. A row that owes cards but has no
+        // character left is forgiven (its remainder could only come from an
+        // optional building), so the player may finish below the granted count
+        // rather than being prompted forever.
+        boolean needCharUpper = owedUpper > 0 && rowHasCharacter(board.getUpperRow());
+        boolean needCharLower = owedLower > 0 && rowHasCharacter(board.getLowerRow());
+        if (needCharUpper || needCharLower) {
+            repromptPickForRemaining(nick, owedUpper, owedLower);
+            return;
+        }
+
         currentResolutionIndex++;
         advanceResolverUntilConnectedAndContinue();
+    }
+
+    /**
+     * Re-opens the character pick (and afterwards the building pick) for the
+     * current resolution player because they still owe cards from their
+     * offering tile. The cards already taken stay taken; only the leftover
+     * budget ({@code owedUpper}/{@code owedLower}) is offered again.
+     * <p>
+     * Sends the player an error explaining why, then the fresh
+     * character-pick prompt, in ONE committed bundle, so the buildings they
+     * just bought, the error, and the new prompt all land on a single
+     * screen. Unlike {@link #enterCharacterPickForCurrentResolutionPlayer},
+     * this does NOT re-grant the tile's food (that happens once, on first
+     * entry) and does NOT advance the resolution index (same player keeps
+     * the turn).
+     */
+    private void repromptPickForRemaining(final String nick,
+                                          final int owedUpper, final int owedLower) {
+        currentUpperBudget = owedUpper;
+        currentLowerBudget = owedLower;
+        currentUpperRemainingForBuilding = owedUpper;
+        currentLowerRemainingForBuilding = owedLower;
+        phase = new PhaseLogic.TurnPickCardsCharacter();
+
+        final String reason = "you still need to take the cards granted by your offering tile"
+                + " (remaining - upper: " + owedUpper + ", lower: " + owedLower + ")";
+        sendToNickname(nick, new ViewCall() {
+            @Override public void apply(VirtualView v) throws RemoteException {
+                v.onActionRejected(reason);
+            }
+        });
+
+        final int upper = owedUpper;
+        final int lower = owedLower;
+        final Board board = match.getBoard();
+        broadcastAndCommit(new ViewCall() {
+            @Override public void apply(VirtualView v) throws RemoteException {
+                v.onBoardSnapshot(board);
+                v.onCharacterPickTurn(nick, upper, lower);
+            }
+        });
+    }
+
+    /**
+     * Whether {@code row} still holds at least one character card. Buildings
+     * are intentionally ignored: they are optional, so the presence of a
+     * (even affordable) building never forces a player to keep picking. An
+     * available character card is therefore the SOLE trigger for re-opening
+     * the pick of a player who still owes cards (see
+     * {@link #acceptBuildingCardsPick}). Since taking a character removes it
+     * from the row, a row inevitably runs out of characters, which is what
+     * guarantees the re-prompt loop terminates.
+     */
+    private static boolean rowHasCharacter(CardRow row) {
+        return !row.getCharacterCards().isEmpty();
     }
 
     private void afterAllResolutionsDone() {
