@@ -307,35 +307,35 @@ public class GameBoardController {
             // ROW 1: Food | People to feed | Farmer Discount
             HBox row1 = new HBox(15);
             row1.getChildren().addAll(
-                    createIconStat("Food_icon.png", f, 22),
-                    createIconStat("Tribe_icon.png", peopleToFeed, 22),
-                    createIconStat("Farmer_discount_icon.png", farmerDiscount, 22)
+                    createIconStat("Food_icon.png", f, 22, "FOOD", "Current food resources. \nFood can be used to feed your tribe and to buy buildings. \nDuring Sustenance events you will lose PP if you don't have enough food to feed your tribe."),
+                    createIconStat("Tribe_icon.png", peopleToFeed, 22, "TRIBE", "Number of Character cards in your Tribe that will need to be fed during Sustenance Events (excluding buildings)."),
+                    createIconStat("Farmer_discount_icon.png", farmerDiscount, 22, "DISCOUNT", "Sustenance reduction.Includes the Gatherers' discount and any additional bonus provided by buildings.")
             );
 
             // ROW 2: Stars | Building Discount | Inventor Icons
             HBox row2 = new HBox(15);
             row2.getChildren().addAll(
-                    createIconStat("Shaman_stars_icon.png", extraStars, 22),
-                    createIconStat("Constructor_discount_icon.png", buildingDiscount, 22),
-                    createIconStat("Inventor_icon.png", inventorIcons, 22)
+                    createIconStat("Shaman_stars_icon.png", extraStars, 22, "STARS","The total number of Star icons on Shaman and Building cards. " +
+                            "\nDuring Shamanic Ritual Events, you will gain or lose points \nbased on the number of Stars you have compared to other players. " ),
+                    createIconStat("Constructor_discount_icon.png", buildingDiscount, 22, "BUILDINGS DISCOUNT","The total discount in Food that you receive from your Builders,\nwhich will be subtracted from the cost of any Building card you want to take.  "),
+                    createIconStat("Inventor_icon.png", inventorIcons, 22, "INVENTION ICONS","The total number of different invention icons among Invention cards. \nAt the end of the game, you will get Prestige Points equal to the number of different Inventions \nmultiplied by the number of Invention cards owned. ")
             );
 
             // ROW 3: Characters (Artists, Builders, Gatherers)
             HBox row3 = new HBox(15);
             row3.getChildren().addAll(
-                    createIconStat("Artist_icon.png", numArtist, 22),
-                    createIconStat("Constructor_icon.png", numBuilder, 22),
-                    createIconStat("Farmer_icon.png", numGatherer, 22)
+                    createIconStat("Artist_icon.png", numArtist, 22, "ARTISTS","Total number of artists in your tribe "),
+                    createIconStat("Constructor_icon.png", numBuilder, 22, "BUILDERS","Total number of builders in your tribe "),
+                    createIconStat("Farmer_icon.png", numGatherer, 22, "GATHERERS","Total number of gatherers in your tribe ")
             );
 
             // ROW 4: Characters (Hunters, Inventors, Shamans)
             HBox row4 = new HBox(15);
             row4.getChildren().addAll(
-                    createIconStat("Hunter_icon.png", numHunter, 22),
-                    createIconStat("Inventor_icon.png", numInventor, 22),
-                    createIconStat("Shaman_icon.png", numShaman, 22)
+                    createIconStat("Hunter_icon.png", numHunter, 22, "HUNTERS","Total number of hunters in your tribe "),
+                    createIconStat("Inventor_icon.png", numInventor, 22, "INVENTORS","Total number of inventors in your tribe "),
+                    createIconStat("Shaman_icon.png", numShaman, 22, "SHAMANS","Total number of shamans in your tribe  ")
             );
-
             // --- POPULATE PLAYER PANELS ---
             if (p.equals(myName)) {
                 // Main player panel (Bottom)
@@ -859,11 +859,40 @@ public class GameBoardController {
      * @param iconName The filename of the icon (must reside in /images/icons/).
      * @param value The numerical statistic to display.
      * @param iconSize The squared size constraint for the icon.
+     * @param tooltipText The descriptive text to show on mouse hover.
      * @return An HBox containing the formatted icon and text.
      */
-    private HBox createIconStat(String iconName, int value, int iconSize) {
+    /**
+     * Creates a standardized UI element pairing a graphical icon with a numerical value.
+     * Includes a tooltip with a bold title and a description.
+     * * @param iconName    The filename of the icon (must reside in /images/icons/).
+     * @param value       The numerical statistic to display.
+     * @param iconSize    The squared size constraint for the icon.
+     * @param title       The bold title for the tooltip.
+     * @param description The detailed description for the tooltip.
+     * @return An HBox containing the formatted icon and text.
+     */
+    private HBox createIconStat(String iconName, int value, int iconSize, String title, String description) {
         HBox box = new HBox(5);
         box.setAlignment(Pos.CENTER_LEFT);
+        box.setPickOnBounds(true);
+
+        // Install a Tooltip with title and description if provided
+        if (title != null && description != null) {
+            // Combine title and description with a newline, no separator line used
+            String tooltipContent = title.toUpperCase() + "\n" + description;
+
+            javafx.scene.control.Tooltip tooltip = new javafx.scene.control.Tooltip(tooltipContent);
+            tooltip.setFont(Font.font("Tempus Sans ITC", FontWeight.BOLD, 14));
+
+            // Custom styling as requested
+            tooltip.setStyle("-fx-background-color: #4B1419ff; -fx-text-fill: #EFE4CBff; -fx-border-color: #EFE4CBff; -fx-border-width: 1px;");
+
+            // Show the tooltip almost instantly
+            tooltip.setShowDelay(javafx.util.Duration.seconds(0.05));
+            javafx.scene.control.Tooltip.install(box, tooltip);
+        }
+
         try {
             String imagePath = "/images/icons/" + iconName;
             Image img = new Image(getClass().getResourceAsStream(imagePath));
@@ -880,6 +909,7 @@ public class GameBoardController {
 
             box.getChildren().addAll(icon, lbl);
         } catch (Exception e) {
+            // Fallback to text-only if the icon fails to load
             String cleanName = iconName.split("\\.")[0].toUpperCase();
             Label lbl = new Label(cleanName + ": " + value);
             lbl.setTextFill(Color.WHITE);
