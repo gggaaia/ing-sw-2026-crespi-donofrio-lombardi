@@ -266,6 +266,17 @@ public class Server {
     }
 
     private void startRmiServer(int port) throws RemoteException {
+        // Make RMI advertise a routable LAN address instead of the
+        // default loopback (127.0.0.1 / 127.0.1.1), so remote clients can
+        // reach the exported stub. An explicit -Djava.rmi.server.hostname
+        // still takes precedence.
+        if (System.getProperty("java.rmi.server.hostname") == null) {
+            String host = it.polimi.ingsw.common.NetworkUtils.bestLanAddress();
+            if (host != null) {
+                System.setProperty("java.rmi.server.hostname", host);
+                System.out.println("RMI advertising hostname: " + host);
+            }
+        }
         Rmi_Server rmiServer = new Rmi_Server(this);
         Object stub = UnicastRemoteObject.exportObject(rmiServer, 0);
         Registry rmiRegistry = LocateRegistry.createRegistry(port);

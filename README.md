@@ -65,11 +65,8 @@ Replace `192.168.1.50` with the actual LAN IP of the machine running the server.
 
 > **Notes:**
 > - The fat JARs bundle the JavaFX native libraries for the platform on which they are built. The server and the TUI client run on any OS; the **GUI** client must be run on (or rebuilt for) the same platform family used at build time.
-> - The **Socket** protocol works across machines with no extra configuration. If **RMI** fails to connect across machines (the server's hostname resolving to a loopback address is the usual cause), start the server with `-Djava.rmi.server.hostname=<server-IP>` so RMI advertises the correct address to clients:
-
-```
-java -Djava.rmi.server.hostname=192.168.1.50 -jar mesos-server.jar
-```
+> - **RMI across machines works out of the box.** Both the server and the RMI client automatically detect and advertise their real LAN address (ignoring loopback and virtual interfaces such as the Docker bridge), so no manual configuration is needed. If detection ever picks the wrong interface on a multi-homed host, you can override it by starting that process with `-Djava.rmi.server.hostname=<that-machine's-IP>` (placed **before** `-jar`).
+> - For two machines to reach each other, they must be on a network that permits device-to-device traffic. Many campus/eduroam/guest Wi-Fi networks enable client isolation, which blocks it; use a personal hotspot, a home router, or Ethernet instead.
 
 ---
 

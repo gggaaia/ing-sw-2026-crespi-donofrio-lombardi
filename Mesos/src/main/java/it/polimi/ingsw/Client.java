@@ -44,20 +44,20 @@ public class Client {
         View view = viewType.equals("gui") ? new GuiView() : new TuiView(scan);
 
         if (viewType.equals("gui")) {
-            // Latch che si sblocca quando JavaFX ha registrato il mainStage.
-            // Il network thread DEVE aspettare che la finestra sia aperta prima
-            // di chiamare promptNickname(), altrimenti GuiView.mainStage è null
-            // e tutti i popup vengono creati senza owner.
+            // This latch opens when JavaFX has saved the mainStage.
+            // The network thread MUST wait until the window is open before
+            // calling promptNickname(), otherwise GuiView.mainStage is null
+            // and all the popups get created without an owner window.
             CountDownLatch fxReady = new CountDownLatch(1);
             GuiView.setOnStageReady(fxReady::countDown);
 
-            // 1. Avviamo il thread di rete in background.
-            // È un daemon thread: quando JavaFX chiude la finestra, la JVM
-            // termina automaticamente anche questo thread.
+            // 1. Start the network thread in the background.
+            // It is a daemon thread: when JavaFX closes the window, the JVM
+            // automatically stops this thread too.
             Thread networkThread = new Thread(() -> {
                 try {
-                    // Aspetta che GuiLauncher.start() abbia chiamato
-                    // GuiView.setMainStage() prima di procedere con la rete.
+                    // Wait until GuiLauncher.start() has called
+                    // GuiView.setMainStage() before starting the network.
                     fxReady.await();
 
                     if (protocol.equals("socket")) {
@@ -72,11 +72,11 @@ public class Client {
             networkThread.setDaemon(true);
             networkThread.start();
 
-            // 2. Avviamo la grafica sul thread principale (bloccante).
+            // 2. Start the graphics on the main thread (this blocks here).
             GuiLauncher.main(new String[0]);
 
         } else {
-            // TUI: rete sul thread principale, bloccante su Scanner.
+            // TUI: network runs on the main thread and blocks on the Scanner.
             if (protocol.equals("socket")) {
                 startSocketClient(host, port, view);
             } else if (protocol.equals("rmi")) {
@@ -109,6 +109,19 @@ public class Client {
     }
 
     private static void startRmiClient(String host, int port, View view) throws Exception {
+        // The RMI client also exports a callback object (its VirtualView)
+        // that the server invokes to push events. Advertise the local
+        // address that actually routes to the server, otherwise RMI may
+        // stamp the stub with a loopback/Docker address the server cannot
+        // reach, and every server->client callback hangs. An explicit
+        // -Djava.rmi.server.hostname still takes precedence.
+        if (System.getProperty("java.rmi.server.hostname") == null) {
+            String localHost = it.polimi.ingsw.common.NetworkUtils.localAddressFor(host, port);
+            if (localHost != null) {
+                System.setProperty("java.rmi.server.hostname", localHost);
+                System.out.println("RMI advertising hostname: " + localHost);
+            }
+        }
         final String serverName = "AdderServer";
         Registry registry = LocateRegistry.getRegistry(host, port);
         VirtualServer rmi_server_stub = (VirtualServer) registry
