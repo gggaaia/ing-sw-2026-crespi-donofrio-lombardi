@@ -16,6 +16,7 @@ import javafx.fxml.FXML;
 import javafx.geometry.Pos;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
+import javafx.scene.control.Tooltip;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.HBox;
@@ -26,6 +27,7 @@ import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
+import javafx.util.Duration;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -153,7 +155,7 @@ public class GameBoardController {
     /**
      * Renders the deck placeholders on the board dynamically based on the current Era.
      * Maps the specific Era to the corresponding graphical asset for the card backs.
-     * @param currentEra The current Era of the game, dictating which card backs to show.
+     * * @param currentEra The current Era of the game, dictating which card backs to show.
      */
     private void updateDecks(it.polimi.ingsw.model.enums.Era currentEra) {
         if (decksBox == null) return;
@@ -179,18 +181,21 @@ public class GameBoardController {
             }
         }
 
-        decksBox.getChildren().add(createDeckNode(tribeBack));
-        decksBox.getChildren().add(createDeckNode(buildingBack));
+        // Add both decks. We flag the building deck as 'true' to attach the visual rules tooltip.
+        decksBox.getChildren().add(createDeckNode(tribeBack, false));
+        decksBox.getChildren().add(createDeckNode(buildingBack, true));
     }
 
     /**
      * Creates a visual node representing a card deck back.
      * Provides a procedural colored rectangle as a fallback if the image resource is missing.
+     * Attaches a graphic tooltip displaying the building rules if the deck is the Building deck.
      *
-     * @param backImageName The filename of the deck back image (without extension).
+     * @param backImageName  The filename of the deck back image (without extension).
+     * @param isBuildingDeck True if this is the Building deck, to attach the rules tooltip.
      * @return A StackPane containing the deck visual with a drop-shadow effect.
      */
-    private StackPane createDeckNode(String backImageName) {
+    private StackPane createDeckNode(String backImageName, boolean isBuildingDeck) {
         StackPane pane = new StackPane();
         pane.setPrefSize(100, 140);
         ImageView deckImage = new ImageView();
@@ -211,7 +216,29 @@ public class GameBoardController {
             lbl.setTextFill(Color.WHITE); lbl.setFont(Font.font("Tempus Sans ITC", FontWeight.BOLD, 14));
             pane.getChildren().addAll(rect, lbl);
         }
+
         pane.setStyle("-fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.8), 10, 0, 5, 5);");
+
+        // --- HOVER LOGIC FOR BUILDING RULES ---
+        if (isBuildingDeck) {
+            try {
+                Tooltip rulesTooltip = new Tooltip();
+                ImageView rulesImgView = new ImageView(new Image(getClass().getResourceAsStream("/images/building_rules.png")));
+
+                rulesImgView.setFitWidth(450);
+                rulesImgView.setPreserveRatio(true);
+
+                rulesTooltip.setGraphic(rulesImgView);
+                rulesTooltip.setShowDelay(Duration.millis(150));
+                rulesTooltip.setShowDuration(Duration.seconds(60));
+                rulesTooltip.setStyle("-fx-background-color: transparent; -fx-padding: 0;");
+
+                Tooltip.install(pane, rulesTooltip);
+            } catch (Exception e) {
+                System.err.println("GRAPHIC ERROR: Could not load '/images/building_rules.png' for the rules tooltip.");
+            }
+        }
+
         return pane;
     }
 
