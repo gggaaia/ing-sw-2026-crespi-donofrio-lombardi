@@ -20,7 +20,7 @@ Interaction and gameplay are supported via both a command-line text interface (*
 
 
 ## Execution
-This project requires **JDK 21** or higher to run correctly.
+This project requires **JDK 23** or higher to run correctly.
 
 ### How to Run the Project From JARs
 
@@ -61,7 +61,7 @@ The code documentation, compiled according to JavaDoc standards, can be accessed
 - [Javadoc](link_here)
 
 ### Database Dump
-The SQL dump file of the database structure and initial data can be found at the following link:
+The SQL dump file of the database structure can be found at the following link:
 - [Database Dump](Mesos/deliverables/final/dump.sql)
 
 

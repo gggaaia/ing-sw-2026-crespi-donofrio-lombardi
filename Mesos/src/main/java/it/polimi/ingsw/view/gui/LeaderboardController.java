@@ -14,33 +14,48 @@ import javafx.scene.text.FontWeight;
 
 import java.util.Map;
 
+/**
+ * Controller for the Global Leaderboard screen in the GUI.
+ * Manages the display of historical player rankings fetched from the database
+ * and provides the user with the ability to safely exit the game application.
+ */
 public class LeaderboardController {
 
     @FXML private VBox globalLeaderboardBox;
-    @FXML private Button backToWelcomeBtn;
     @FXML private Button exitGameBtn;
-    @FXML private Label userCategoryRankLbl; // Nuova etichetta richiesta
+    @FXML private Label userCategoryRankLbl;
 
+    /**
+     * Initializes the controller class. This method is automatically called
+     * after the FXML file has been loaded.
+     * Sets up the style and event handler for the exit button.
+     */
     @FXML
     public void initialize() {
         String btnStyle = "-fx-text-fill: #EFE4CB; -fx-font-family: 'Tempus Sans ITC'; -fx-font-weight: bold; -fx-font-size: 14; -fx-cursor: hand; -fx-background-radius: 20;";
 
-        if (backToWelcomeBtn != null) {
-            backToWelcomeBtn.setOnAction(e -> GuiView.abortLobbyAndDisconnect());
-            backToWelcomeBtn.setStyle("-fx-background-color: #EB5E28; " + btnStyle);
-            addHoverEffect(backToWelcomeBtn);
-        }
-
         if (exitGameBtn != null) {
-            exitGameBtn.setOnAction(e -> {
-                Platform.exit();
-                System.exit(0);
-            });
+            exitGameBtn.setOnAction(e -> onExitClicked());
             exitGameBtn.setStyle("-fx-background-color: #c0392b; " + btnStyle);
             addHoverEffect(exitGameBtn);
         }
     }
 
+    /**
+     * Completely closes the client application.
+     *
+     */
+    @FXML
+    public void onExitClicked() {
+        Platform.exit();
+        System.exit(0);
+    }
+
+    /**
+     * Adds a scaling and glowing hover effect to the specified button.
+     *
+     * @param btn The button to apply the hover effect to.
+     */
     private void addHoverEffect(Button btn) {
         DropShadow glow = new DropShadow();
         glow.setColor(Color.web("#FFFFAA"));
@@ -61,14 +76,20 @@ public class LeaderboardController {
     }
 
     /**
-     * Popola la classifica. Ora riceve anche il nickname e il numero di giocatori.
+     * Populates the global leaderboard UI with the provided historical statistics.
+     * It dynamically highlights the row corresponding to the current user and displays
+     * their specific rank based on the player count category.
+     *
+     * @param historicalStats A map containing player nicknames and their corresponding high scores.
+     * @param myNickname      The nickname of the client's player to highlight their score.
+     * @param categorySize    The number of players in the match, used to contextualize the ranking category.
      */
     public void updateGlobalLeaderboard(Map<String, Integer> historicalStats, String myNickname, int categorySize) {
         if (globalLeaderboardBox == null) return;
         globalLeaderboardBox.getChildren().clear();
 
         if (userCategoryRankLbl != null) {
-            userCategoryRankLbl.setText(""); // Pulisce il testo iniziale
+            userCategoryRankLbl.setText(""); // Clears the initial text
         }
 
         if (historicalStats == null || historicalStats.isEmpty()) {
@@ -86,18 +107,18 @@ public class LeaderboardController {
             row.setStyle("-fx-background-color: #562A2C; -fx-border-color: #EFE4CB; -fx-border-width: 2; -fx-border-radius: 35; -fx-background-radius: 35; -fx-padding: 10;");
             row.setMaxWidth(400);
 
-            // Controlla se questa riga appartiene all'utente
+            // Checks if this row belongs to the current user
             boolean isMe = (myNickname != null && myNickname.equals(entry.getKey()));
 
             if (isMe) {
-                // Illumina la riga in modo molto leggero (opacità al 50%)
+                // Applies glow effect to highlight the user's row
                 DropShadow subtleGlow = new DropShadow();
                 subtleGlow.setColor(Color.web("#FFFFAA", 0.5));
                 subtleGlow.setRadius(8);
                 subtleGlow.setSpread(0.1);
                 row.setEffect(subtleGlow);
 
-                // Scrive il testo nella nuova Label
+                // Updates the label with the user's specific ranking
                 if (userCategoryRankLbl != null) {
                     userCategoryRankLbl.setText("You are the #" + rank + " player in your category (" + categorySize + " players match)");
                 }
