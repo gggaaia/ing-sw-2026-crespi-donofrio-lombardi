@@ -127,7 +127,10 @@ The SQL dump file of the database structure can be found at the following link:
 
 ## Group Members
 
-*(Section left blank as requested — Insert names, surnames, student IDs, and GitHub accounts of the team members here prior to final submission)*
+- [Gaia D'onofrio ](https://github.com/gggaaia)
+- [Giacomo Lombardi](https://github.com/Lomba8)
+- [Simone Crespi](https://github.com/Screpes)
+
 
 ---
 
