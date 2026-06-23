@@ -22,9 +22,54 @@ Interaction and gameplay are supported via both a command-line text interface (*
 ## Execution
 This project requires **JDK 23** or higher to run correctly.
 
+### How the JARs Were Compiled
+
+The JARs are built with the **Maven Shade Plugin**, which packages the project together with all of its dependencies (JavaFX, ControlsFX, Gson, PostgreSQL/JDBC) into two standalone, executable "fat" JARs. A single command produces both artifacts. From the `Mesos/` directory (the module containing the `pom.xml`), run:
+
+```
+mvn clean package
+```
+
+The compiled JARs are placed in the `Mesos/target/` directory:
+
+| JAR | Entry point (`Main-Class`) |
+| :--- | :--- |
+| `mesos-server.jar` | `it.polimi.ingsw.Server` |
+| `mesos-client.jar` | `it.polimi.ingsw.Client` |
+
 ### How to Run the Project From JARs
 
-*(Section left blank as requested — Insert the exact `java -jar ...` commands and IP configuration instructions for both Server and Client here prior to final submission)*
+Run the commands below from the `Mesos/target/` directory (or prefix the JAR names with their path).
+
+#### Server
+
+The server has no arguments and listens on the default ports (RMI `1234`, Socket `8080`):
+
+```
+java -jar mesos-server.jar
+```
+
+#### Client
+
+The client takes the **server's IP address** as an optional first argument. With no argument it defaults to `localhost` (single-machine runs); on separate machines, pass the server's IP. The protocol (`socket`/`rmi`) and interface (`tui`/`gui`) are then chosen interactively at startup.
+
+```
+# Same machine as the server (defaults to localhost)
+java -jar mesos-client.jar
+
+# Different machine: connect to the server's IP address
+java -jar mesos-client.jar 192.168.1.50
+```
+
+Replace `192.168.1.50` with the actual LAN IP of the machine running the server.
+
+> **Notes:**
+> - The fat JARs bundle the JavaFX native libraries for the platform on which they are built. The server and the TUI client run on any OS; the **GUI** client must be run on (or rebuilt for) the same platform family used at build time.
+> - The **Socket** protocol works across machines with no extra configuration. If **RMI** fails to connect across machines (the server's hostname resolving to a loopback address is the usual cause), start the server with `-Djava.rmi.server.hostname=<server-IP>` so RMI advertises the correct address to clients:
+
+```
+java -Djava.rmi.server.hostname=192.168.1.50 -jar mesos-server.jar
+```
 
 ---
 

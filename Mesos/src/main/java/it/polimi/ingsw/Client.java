@@ -32,10 +32,13 @@ public class Client {
                 "View?     [tui/gui]:    ",
                 "tui", "gui");
 
+        // Server IP address: optional first CLI arg. With no args we
+        // default to localhost (single-machine run). The port is NOT
+        // taken from args: it is always the protocol's default.
         String host = args.length > 0 ? args[0] : DEFAULT_HOST;
-        int port = args.length > 1
-                ? Integer.parseInt(args[1])
-                : (protocol.equals("rmi") ? DEFAULT_RMI_PORT : DEFAULT_SOCKET_PORT);
+        int port = protocol.equals("rmi") ? DEFAULT_RMI_PORT : DEFAULT_SOCKET_PORT;
+
+        System.out.println("Connecting to " + host + ":" + port + " via " + protocol);
 
         // Reuse the same Scanner inside TuiView.
         View view = viewType.equals("gui") ? new GuiView() : new TuiView(scan);
