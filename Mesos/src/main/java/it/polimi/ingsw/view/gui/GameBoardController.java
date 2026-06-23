@@ -31,7 +31,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
-import static it.polimi.ingsw.common.dto.Phase.*;
 
 /**
  * Main JavaFX Controller for the Game Board GUI.
@@ -88,7 +87,6 @@ public class GameBoardController {
                     String friendlyPhase = getPhaseDescription(state.getCurrentPhase());
                     String activePlayer = state.getCurrentPlayer();
 
-                    // Mostriamo il nome del giocatore attivo solo se è il turno di qualcuno
                     if (activePlayer != null && !activePlayer.isEmpty()) {
                         phaseLabel.setText(friendlyPhase + " | Active Player: " + activePlayer);
                     } else {
