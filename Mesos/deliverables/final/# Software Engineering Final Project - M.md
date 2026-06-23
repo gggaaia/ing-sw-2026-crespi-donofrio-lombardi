@@ -17,11 +17,11 @@
 
 ## 2. Division of Labor
 
-| Member Name | Area of Responsibility | Key Tasks |
-| :--- | :--- | :--- |
-| Simone | |  |
-| Gaia|  |  |
-| Giacomo |  |  |
+| Member Name | Area of Responsibility                                                                                                                                       | 
+| :--- |:-------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Simone | Model: Card implementation, `Decks`, `Match` <br>Controller:Server/client <br>Network: socket/RMI implementation <br> Tui <br> DB implementation             |  
+| Gaia| Model:  <br> Controller: <br> Gui implementation <br>                                                                                                        |  
+| Giacomo | Model: `TurnOrderSlot`,`TurnOrderTile`,`Match` <br> Controller:Server/client  <br> Network: socket/RMI implementation <br> Tui Logic <br> Player Persistance |  
 
 ---
 
@@ -36,12 +36,10 @@ This approach grants code extensibility: to add a new game feature or network me
 * **State Pattern**: implemented server-side in the `controller.server` package, where the current game phase is encapsulated into distinct `PhaseLogic` classes. Each class represents a specific state of the game. The `ServerController` holds a `PhaseLogic` field and, by swapping that object on each transition, changes its behavior dynamically, ensuring that only valid actions for the current state are processed.
 * **Singleton**: Used in 
 	* `DatabaseManager`: It's used to centralize database resource management and prevent thread-safety issues caused by multiple, uncoordinated connections by providing a single, controllable access point for infrastructure operations
-	* 
 
 ### 3.2 Architectural Choices
 * **TUI**: to maintain a clean separation of concerns, the implementation is split between two main components: `TuiPrinter` is an utility class whose sole purpose is to output formatting, it doesn't perform any I/O operation, `TuiView` handles the input/output flow, it interacts directly with the user via console
 * **VirtualServer/VirtualView**: The  interfaces act as a communication abstraction layer, decoupling the game logic from the underlying network protocols. By defining a unified contract for both RMI and Socket implementations, this design ensures that the protocols are fully interchangeable. This polymorphism allows the `ServerController` to remain network-agnostic, interacting seamlessly with client endpoints regardless of the transport mechanism in use
-* **State Management:** 
 ---
 
 ## 4. Communication Protocols
