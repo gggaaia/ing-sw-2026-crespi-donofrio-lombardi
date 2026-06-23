@@ -9,7 +9,7 @@ import javafx.stage.Stage;
 import java.net.URL;
 
 /**
- * Main entry point for the Mesos game Graphical User Interface.
+ * Main entry point for the GUI.
  * This class extends the JavaFX Application class to initialize and launch the GUI.
  */
 public class GuiLauncher extends Application {
