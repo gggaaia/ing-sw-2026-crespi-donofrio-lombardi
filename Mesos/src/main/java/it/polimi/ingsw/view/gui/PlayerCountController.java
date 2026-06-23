@@ -113,12 +113,7 @@ public class PlayerCountController {
     @FXML
     public void onCloseClicked(ActionEvent event) {
         System.out.println("LOG: The user aborted the game creation. Returning to Welcome.");
-
-        // 1. Unlock the network thread (which will trigger the default match creation)
         GuiView.abortPlayerCount();
-
-        // 2. WHILE the thread attempts to start the match, we sever the connection
-//    and force a hard reload of the "Welcome" screen.
 //    This will eliminate the blur, close the popup, and ignore the Lobby loading.
         GuiView.abortLobbyAndDisconnect();
     }

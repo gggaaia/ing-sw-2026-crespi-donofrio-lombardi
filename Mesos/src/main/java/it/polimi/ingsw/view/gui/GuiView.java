@@ -20,60 +20,66 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Main Graphical User Interface (GUI) implementation of the View.
- * This class acts as the bridge between the client's network/logic controllers
- * and the JavaFX UI. It implements the {@link View} interface to handle asynchronous
- * prompts, popups, scene changes, and UI refreshes based on the game state.
+ * Main Graphical User Interface (GUI) implementation of the {@link View}.
+ * <p>
+ * This class acts as the bridge between the client's network/logic controllers and the JavaFX UI.
+ * Since network events arrive on background threads and JavaFX requires UI updates to happen on the
+ * Application Thread, this class makes extensive use of {@code Platform.runLater()} for rendering
+ * and {@link CompletableFuture} to block the network thread while waiting for asynchronous user inputs.
+ * </p>
  */
 public class GuiView implements View {
 
+    // --- Singleton-like Instance ---
+    /** * Static reference to the active instance. Allows UI controllers (which are instantiated
+     * by JavaFX FXML loaders) to easily communicate back to this main view manager.
+     */
     private static GuiView instance;
 
+    // --- Asynchronous Input Futures ---
     private static CompletableFuture<String> nicknameFuture;
     private static CompletableFuture<Void> startClickedFuture = new CompletableFuture<>();
     private static CompletableFuture<Integer> playerCountFuture;
+
+    // --- Core UI State ---
     private static Stage mainStage;
     private static Runnable onStageReady;
     private static boolean isReconnecting = false;
     private static ClientController clientController;
-
-    // Switch to "blind" the graphics during the exit/abort process
     private boolean isAborting = false;
 
+    // --- Active Controllers & Stages ---
     private Stage currentPopupStage;
     private Stage lobbyStage;
     private NicknameController nicknameController;
     private LobbyController lobbyController;
     private TotemSelectionController totemController;
+
     private boolean isGameBoardLoaded = false;
     private GameBoardController boardController;
-
-    // References to game over UI controllers
     private GameOverController gameOverController;
     private LeaderboardController leaderboardController;
 
     /**
-     * Constructor for GuiView.
-     * Saves the current instance to a static variable, acting as a Singleton bridge
-     * to allow static methods to access instance-level UI components.
+     * Constructs the GuiView and registers it as the active instance.
      */
     public GuiView() {
         instance = this;
     }
 
     /**
-     * Sets a callback to be executed once the primary JavaFX stage is ready.
+     * Sets a callback to be executed once the primary JavaFX Stage is initialized.
      *
-     * @param runnable The action to execute when the stage is set.
+     * @param runnable The action to execute when the stage is ready.
      */
     public static void setOnStageReady(Runnable runnable) {
         onStageReady = runnable;
     }
 
     /**
-     * Injects the main JavaFX Stage into the view and triggers the ready callback.
+     * Injects the main JavaFX Stage into the view and triggers the initialization callback.
      *
-     * @param stage The primary stage of the application.
+     * @param stage The primary stage of the application provided by JavaFX.
      */
     public static void setMainStage(Stage stage) {
         mainStage = stage;
@@ -83,8 +89,8 @@ public class GuiView implements View {
     }
 
     /**
-     * Instance method to handle the "Start" button click event from the Welcome screen.
-     * Manages popups based on whether the user is reconnecting or starting a fresh game.
+     * Handles the logical progression when the user clicks the initial "Start" button.
+     * Depending on the state, it either opens the nickname prompt or completes the pending future.
      */
     public void notifyStartClickedInstance() {
         isAborting = false;
@@ -99,8 +105,7 @@ public class GuiView implements View {
     }
 
     /**
-     * Static wrapper to handle the "Start" button click event.
-     * Delegates the action to the active GuiView instance.
+     * Static wrapper to handle the "Start" button click event from external UI controllers.
      */
     public static void notifyStartClicked() {
         if (instance != null) {
@@ -111,7 +116,9 @@ public class GuiView implements View {
     }
 
     /**
-     * Instance method to process the submitted nickname.
+     * Processes the nickname submitted by the user.
+     * If reconnecting, it spins up a new thread to handle the network reconnect.
+     * Otherwise, it completes the pending future allowing the login sequence to continue.
      *
      * @param nickname The chosen nickname.
      */
@@ -127,8 +134,7 @@ public class GuiView implements View {
     }
 
     /**
-     * Static wrapper to process the submitted nickname.
-     * Delegates the action to the active GuiView instance.
+     * Static wrapper to submit the chosen nickname from external UI controllers.
      *
      * @param nickname The chosen nickname.
      */
@@ -141,9 +147,9 @@ public class GuiView implements View {
     }
 
     /**
-     * Completes the future for the selected player count.
+     * Completes the future for the selected player count, unblocking the server setup sequence.
      *
-     * @param count The number of players chosen.
+     * @param count The selected number of players.
      */
     public static void submitPlayerCount(int count) {
         if (playerCountFuture != null) {
@@ -152,13 +158,17 @@ public class GuiView implements View {
     }
 
     /**
-     * Resets the asynchronous futures to prepare the View for a new game session.
+     * Resets all asynchronous futures, readying the client for a completely new session.
      */
     public static void resetForNewGame() {
         startClickedFuture = new CompletableFuture<>();
         nicknameFuture = null;
         playerCountFuture = null;
     }
+
+    // =========================================================================================
+    // VIEW INTERFACE IMPLEMENTATION (Synchronous blocking calls for the network thread)
+    // =========================================================================================
 
     @Override
     public String promptNickname() {
@@ -168,6 +178,7 @@ public class GuiView implements View {
             try { return nicknameFuture.get(); } catch (Exception e) { return null; }
         }
 
+        // Wait for the user to click start, then show the nickname popup
         new Thread(() -> {
             try {
                 startClickedFuture.get();
@@ -178,7 +189,7 @@ public class GuiView implements View {
         }).start();
 
         try {
-            return nicknameFuture.get();
+            return nicknameFuture.get(); // Blocks caller until the user submits the form
         } catch (Exception e) {
             return null;
         }
@@ -187,9 +198,11 @@ public class GuiView implements View {
     @Override
     public void displayError(String message) {
         Platform.runLater(() -> {
+            // If the nickname popup is open, show the error inside it inline
             if (currentPopupStage != null && currentPopupStage.isShowing() && nicknameController != null) {
                 nicknameController.showError("This nickname is already taken!");
             } else {
+                // Otherwise show a generic OS-level alert
                 Alert alert = new Alert(Alert.AlertType.ERROR);
                 alert.setTitle("Error");
                 alert.setHeaderText("Connection Error");
@@ -205,13 +218,19 @@ public class GuiView implements View {
     @Override
     public void displayInfo(String message) {}
 
+    /**
+     * The core rendering engine of the GUI. Called by the ClientController whenever the model updates.
+     * It evaluates the current game phase and delegates rendering to the appropriate FXML controller.
+     *
+     * @param state The updated client-side state of the game.
+     */
     @Override
     public void refresh(ClientController state) {
         Platform.runLater(() -> {
             clientController = state;
             Phase currentPhase = state.getCurrentPhase();
 
-            // Close the Nickname popup as soon as the server accepts us and updates the phase
+            // 1. Clean up login popups if we successfully moved past the nickname phase
             if (currentPopupStage != null && currentPopupStage.isShowing() && "Enter Nickname".equals(currentPopupStage.getTitle())) {
                 if (currentPhase != null && !(currentPhase instanceof Phase.WaitingForNickname)) {
                     currentPopupStage.close();
@@ -224,17 +243,16 @@ public class GuiView implements View {
                     currentPhase instanceof Phase.WaitingForPlayerCount ||
                     currentPhase instanceof Phase.WaitingForPlayers);
 
-            // We ONLY show the color picking popup if the server explicitly tells us we are in that phase.
             boolean isColorPicking = (currentPhase instanceof Phase.ColorPicking);
 
-            // Keep the Lobby open even during COLOR_PICKING as a background
+            // 2. Manage the Lobby Screen
             if ((currentPhase instanceof Phase.WaitingForPlayers || isColorPicking) && !isAborting) {
                 handleLobbyPhase(state);
             } else {
                 closeLobbyIfOpen();
             }
 
-            // Handle Totem Selection Popup
+            // 3. Manage the Totem Selection Popup
             if (isColorPicking) {
                 if (currentPopupStage != null && currentPopupStage.isShowing() && totemController == null) {
                     currentPopupStage.close();
@@ -246,16 +264,15 @@ public class GuiView implements View {
 
             boolean isGameStarted = !isPreGame && !isColorPicking && !(currentPhase instanceof Phase.GameEnded);
 
-            // Handle Game Ended Phase
+            // 4. Manage Game Over and Leaderboards
             if (currentPhase instanceof Phase.GameEnded) {
                 if (currentPopupStage != null && currentPopupStage.isShowing()) {
                     currentPopupStage.close();
                     currentPopupStage = null;
                 }
-                // Call the match game over screen
                 showMatchGameOverScreen(state);
             }
-            // If the game is started and NOT ended, show the normal Game Board
+            // 5. Manage the Main Game Board rendering
             else if (isGameStarted) {
                 if (currentPopupStage != null && currentPopupStage.isShowing()) {
                     currentPopupStage.close();
@@ -271,7 +288,7 @@ public class GuiView implements View {
     }
 
     /**
-     * Ensures that the main Game Board FXML is loaded and displayed on the primary stage.
+     * Initializes the main Game Board scene on the primary stage if it hasn't been loaded yet.
      */
     private void ensureGameBoardLoaded() {
         if (!isGameBoardLoaded) {
@@ -292,7 +309,7 @@ public class GuiView implements View {
     }
 
     /**
-     * Handles the logic for rendering the Lobby phase.
+     * Renders or updates the Lobby phase UI.
      *
      * @param state The current client controller state.
      */
@@ -302,7 +319,7 @@ public class GuiView implements View {
     }
 
     /**
-     * Loads and displays the Lobby popup window.
+     * Instantiates the Lobby popup as a transparent, non-modal window over the main stage.
      */
     private void setupLobbyScreen() {
         try {
@@ -325,9 +342,6 @@ public class GuiView implements View {
         }
     }
 
-    /**
-     * Closes the Lobby popup if it is currently open.
-     */
     private void closeLobbyIfOpen() {
         if (lobbyController != null) {
             if (lobbyStage != null && lobbyStage.isShowing()) lobbyStage.close();
@@ -336,7 +350,7 @@ public class GuiView implements View {
     }
 
     /**
-     * Loads and displays the Totem Selection popup window.
+     * Instantiates and configures the Totem Selection popup.
      *
      * @param state The current client controller state containing available colors.
      */
@@ -371,9 +385,6 @@ public class GuiView implements View {
         }
     }
 
-    /**
-     * Closes the Totem Selection popup if it is currently open.
-     */
     private void closeTotemPopupIfOpen() {
         if (totemController != null && currentPopupStage != null && currentPopupStage.isShowing()) {
             currentPopupStage.close();
@@ -423,12 +434,12 @@ public class GuiView implements View {
             Platform.runLater(() -> { if (currentPopupStage != null) currentPopupStage.close(); });
             return count;
         } catch (Exception e) {
-            return 2;
+            return 2; // Safe default
         }
     }
 
     /**
-     * Opens the popup to prompt the user for their Nickname.
+     * Loads and displays the initial Nickname prompt popup.
      */
     private void openNicknamePopup() {
         try {
@@ -451,15 +462,15 @@ public class GuiView implements View {
     }
 
     /**
-     * Aborts the player count selection process.
+     * Cancels the player count selection process if interrupted.
      */
     public static void abortPlayerCount() {
         if (playerCountFuture != null) playerCountFuture.cancel(true);
     }
 
     /**
-     * Instance method to handle a clean exit from the lobby
-     * and return the user to the Welcome screen.
+     * Safely tears down the active lobby connection and returns the user to the Welcome screen.
+     * Prevents GUI glitches by blinding rapid state updates during the transition.
      */
     public void abortLobbyAndDisconnectInstance() {
         isAborting = true;
@@ -483,14 +494,17 @@ public class GuiView implements View {
     }
 
     /**
-     * Static wrapper to safely disconnect from the lobby.
-     * Delegates the action to the active GuiView instance.
+     * Static wrapper for disconnecting from the lobby.
      */
     public static void abortLobbyAndDisconnect() {
         if (instance != null) {
             instance.abortLobbyAndDisconnectInstance();
         }
     }
+
+    // =========================================================================================
+    // IN-GAME PROMPTS (Delegated to GameBoardController)
+    // =========================================================================================
 
     @Override
     public int promptOfferingTile(int trackSize) {
@@ -585,11 +599,13 @@ public class GuiView implements View {
     }
 
     // =========================================================================================
-    // END OF GAME SCREEN MANAGEMENT METHODS
+    // END OF GAME SCREEN MANAGEMENT
     // =========================================================================================
 
     /**
-     * Displays the match results on the main stage once the game has concluded.
+     * Swaps the main scene to display the match results leaderboard once the game concludes.
+     *
+     * @param state The final state of the game.
      */
     private void showMatchGameOverScreen(ClientController state) {
         try {
@@ -611,7 +627,8 @@ public class GuiView implements View {
     }
 
     /**
-     * Static method allowing the GameOverController to trigger the scene change.
+     * Static method allowing internal GUI controllers to trigger the scene change
+     * to the global historical leaderboard.
      */
     public static void showGlobalLeaderboardScreen() {
         if (instance != null) {
@@ -621,21 +638,19 @@ public class GuiView implements View {
 
     /**
      * Loads the global database history by swapping the scene on the mainStage.
+     * Retrieves the necessary leaderboard data directly from the client controller.
      */
     private void showGlobalLeaderboardScreenInstance() {
         Platform.runLater(() -> {
             try {
-                // 1. LOAD THE FXML AND INITIALIZE THE SCENE
                 FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/game_leaderboard.fxml"));
                 Parent root = loader.load();
 
-                // Now that the page is fully loaded, the controller is successfully instantiated
                 leaderboardController = loader.getController();
 
                 mainStage.setScene(new Scene(root));
                 mainStage.centerOnScreen();
 
-                // 2. PASS THE DATA (No background thread needed, data is already stored in RAM!)
                 if (clientController != null && leaderboardController != null) {
                     Map<String, Integer> globalStats = clientController.getGlobalLeaderboard();
                     String myName = clientController.getMyNickname();

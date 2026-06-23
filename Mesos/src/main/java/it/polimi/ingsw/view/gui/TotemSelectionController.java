@@ -24,7 +24,7 @@ public class TotemSelectionController {
     @FXML private HBox totemContainer;
     @FXML private Button continueButton;
 
-    // References to the fixed totems in the FXML
+    // References to the totems in the FXML
     @FXML private ImageView totem_BLACK, totem_BLUE, totem_RED, totem_WHITE, totem_YELLOW;
 
     /**
@@ -117,7 +117,7 @@ public class TotemSelectionController {
                 String colorName = img.getId().replace("totem_", "");
                 selectedColor = TotemColor.valueOf(colorName);
 
-                // Apply the luminous aura
+                // Apply aura
                 applyGlow(img, selectedColor);
                 continueButton.setDisable(false);
             });
@@ -126,7 +126,7 @@ public class TotemSelectionController {
 
     /**
      * Applies a glowing DropShadow effect to the selected totem image.
-     * The color of the glow matches or complements the selected totem's color.
+     * The color of the glow matches the selected totem's color.
      *
      * @param img   The ImageView to apply the effect to.
      * @param color The selected TotemColor used to determine the glow color.
