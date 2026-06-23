@@ -34,8 +34,8 @@ The compiled JARs are placed in the `Mesos/target/` directory:
 
 | JAR | Entry point (`Main-Class`) |
 | :--- | :--- |
-| [`mesos-server.jar`](https://github.com/gggaaia/ing-sw-2026-crespi-donofrio-lombardi-osmani/blob/main/Mesos/target/mesos-server.jar) | `it.polimi.ingsw.Server` |
-| [`mesos-client.jar`](https://github.com/gggaaia/ing-sw-2026-crespi-donofrio-lombardi-osmani/blob/main/Mesos/target/mesos-client.jar) | `it.polimi.ingsw.Client` |
+| [`mesos-server.jar`](https://github.com/gggaaia/ing-sw-2026-crespi-donofrio-lombardi-osmani/blob/main/Mesos/deliverables/final/mesos-server.jar) | `it.polimi.ingsw.Server` |
+| [`mesos-client.jar`](https://github.com/gggaaia/ing-sw-2026-crespi-donofrio-lombardi-osmani/blob/main/Mesos/deliverables/final/mesos-client.jar) | `it.polimi.ingsw.Client` |
 
 ### How to Run the Project From JARs
 
