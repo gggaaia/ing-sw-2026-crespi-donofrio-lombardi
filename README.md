@@ -85,7 +85,7 @@ Replace `192.168.1.50` with the actual LAN IP of the machine running the server.
 | Socket                         |      ✅       |
 | RMI                            | ✅ |
 | Multiple Games                 | ❌ |
-| Database Leaderboard           | ✅ |
+|  Leaderboard           | ✅ |
 | Game Persistence               | ❌ |
 | Resilience to Disconnections   | ✅ |
 
@@ -95,9 +95,8 @@ Replace `192.168.1.50` with the actual LAN IP of the machine running the server.
 ## Documentation
 
 ### UML
-The following links display the class diagrams of the project:
-- [Detailed UML](link_here)
-- [General UML](link_here)
+- [Model UML](Mesos/deliverables/final/UMLModel.png)
+- [Controller UML](Mesos/deliverables/final/ControllerUML.svg)
 
 ### Coverage Report
 The JUnit test coverage report can be viewed at the following link:
@@ -110,6 +109,7 @@ The code documentation, compiled according to JavaDoc standards, can be accessed
 ### Database Dump
 The SQL dump file of the database structure can be found at the following link:
 - [Database Dump](Mesos/deliverables/final/dump.sql)
+- [SQL setup file](Mesos/deliverables/final/DBTables.sql)
 
 
 ---

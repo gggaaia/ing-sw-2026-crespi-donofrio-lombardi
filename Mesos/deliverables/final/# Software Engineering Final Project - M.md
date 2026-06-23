@@ -3,7 +3,7 @@
 ## 1. Implemented Features vs. Requirements
 
 | Requirement | Description  | 
-| :--- | :--- | :--- | :--- |
+| :--- | :--- | 
 | Complete Rules | The project implements the complete rules from the game | - |
 | TUI | A text-based user interface that enables complete game playability, allowing users to execute game actions and interact with the game state directly via command-line inputs  | 
 | GUI | A graphical user interface featuring a responsive visual representation of the game state, interactive components for move execution, and real-time feedback  |  
