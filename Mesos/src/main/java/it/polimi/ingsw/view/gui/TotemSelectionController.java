@@ -147,13 +147,4 @@ public class TotemSelectionController {
         img.setEffect(glow);
     }
 
-    /**
-     * Handles the action when the close button is clicked.
-     * Triggers an emergency method in GuiView to disconnect and return to the Welcome screen.
-     */
-    @FXML
-    public void onCloseClicked() {
-        // Calls the emergency method in GuiView to disconnect and return to the Welcome screen
-        GuiView.abortLobbyAndDisconnect();
-    }
 }

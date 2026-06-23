@@ -672,16 +672,23 @@ public class GameBoardController {
      */
     private void applyCardSelectionVisuals() {
         if (!isCardPromptActive) return;
+
         if (phaseLabel != null) {
             String hint = "CHARACTER".equals(activeCardTargetType) ?
                     " (Click Skip to save picks for Buildings)." : " (Click Skip to pass).";
-            phaseLabel.setText("YOUR TURN! Select " + activeCardTargetType + " from " + activeCardRowName + " ROW (Max " + activeCardBudget + ")" + hint);
+            String instruction;
+            if (activeCardBudget > 1) {
+                instruction = "YOUR TURN! Select up to " + activeCardBudget + " " + activeCardTargetType + "S, THEN click CONFIRM" + hint;
+            } else {
+                instruction = "YOUR TURN! Select 1 " + activeCardTargetType + ", then click CONFIRM" + hint;
+            }
+
+            phaseLabel.setText(instruction);
             phaseLabel.setTextFill(Color.web("#EFE4CB"));
         }
 
         HBox targetBox = activeCardRowName.equals("UPPER") ? upperRowBox : lowerRowBox;
         if (targetBox == null) return;
-
         if (myStatusBox != null) {
             // Remove previous instances of the buttons to avoid duplication
             myStatusBox.getChildren().removeIf(n -> "actionButtonsBox".equals(n.getId()) || "confirmSelectionBtn".equals(n.getId()));

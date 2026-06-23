@@ -107,17 +107,5 @@
             </Button>
          </children>
       </VBox>
-      <Button layoutX="15.0" layoutY="16.0" mnemonicParsing="false" onAction="#onCloseClicked" style="-fx-background-color: #D85F2Bff; -fx-background-radius: 10; -fx-border-radius: 10; -fx-border-width: 1; -fx-border-color: #7B3C1F;" text="Close" textFill="#fff3d8">
-         <font>
-            <Font name="Tempus Sans ITC" size="10.0" />
-         </font>
-         <effect>
-            <DropShadow>
-               <color>
-                  <Color opacity="0.3104325234889984" />
-               </color>
-            </DropShadow>
-         </effect>
-      </Button>
    </children>
 </AnchorPane>
