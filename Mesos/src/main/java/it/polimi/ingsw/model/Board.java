@@ -457,6 +457,28 @@ public class Board implements Serializable {
     }
 
     /**
+     * Removes the given player's totem from the offering track, if it is
+     * there. Used at end of round for a player who claimed a tile and
+     * then disconnected: taking their totem off the track means it won't
+     * be moved into a front turn-order slot, so they get pushed to the
+     * back like any other disconnected player.
+     *
+     * @param p the player whose totem should be taken off the track
+     * @return {@code true} if a totem was removed, {@code false} if the
+     *         player's totem was not on the track
+     */
+    public boolean removeFromOfferingTrack(Player p) {
+        TotemColor color = p.getPlayerColor();
+        for (OfferingTile tile : offeringTrack) {
+            if (tile.isOccupied() && tile.getCurrentTotemColor() == color) {
+                tile.clearTile();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Returns the players currently placed on the offering track, in the
      * left-to-right order of the offering tiles they occupy.
      * <p>

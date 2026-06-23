@@ -968,9 +968,21 @@ public class ServerController {
 
     private void afterAllResolutionsDone() {
         // End-of-round housekeeping:
-        //   clear turn order tile, move offering->turn-order tile,
-        //   append missing players, apply slot bonuses, find the
-        //   special building's owner.
+        //   demote disconnected players, clear turn order tile, move
+        //   offering->turn-order tile, append missing players, apply
+        //   slot bonuses, find the special building's owner.
+        //
+        // A player who claimed an offering tile and then dropped would
+        // otherwise keep the good (front) turn-order slot it earned for
+        // a whole round. Take its totem off the offering track first, so
+        // moveOfferingTrackToTurnOrder only places connected players at
+        // the front and appendMissingPlayersToTurnOrderTile pushes the
+        // disconnected ones to the back right away.
+        for (Player p : match.getPlayersList()) {
+            if (!server.isConnected(p.getNickname())) {
+                match.getBoard().removeFromOfferingTrack(p);
+            }
+        }
         for (Player p : match.getPlayersList()) {
             match.getBoard().getTurnOrderTile().clearSlot(p);
         }
