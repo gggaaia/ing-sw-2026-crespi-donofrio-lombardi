@@ -3,7 +3,7 @@
 ## 1. Implemented Features vs. Requirements
 
 | Requirement | Description  | 
-| :--- | :--- | :--- | :--- |
+| :--- | :--- | 
 | Complete Rules | The project implements the complete rules from the game | - |
 | TUI | A text-based user interface that enables complete game playability, allowing users to execute game actions and interact with the game state directly via command-line inputs  | 
 | GUI | A graphical user interface featuring a responsive visual representation of the game state, interactive components for move execution, and real-time feedback  |  
@@ -17,11 +17,13 @@
 
 ## 2. Division of Labor
 
-| Member Name | Area of Responsibility                                                                                                                                       | 
-| :--- |:-------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Simone | Model: Card implementation, `Decks`, `Match` <br>Controller:Server/client <br>Network: socket/RMI implementation <br> Tui <br> DB implementation             |  
-| Gaia| Model:  <br> Controller: <br> Gui implementation <br>                                                                                                        |  
-| Giacomo | Model: `TurnOrderSlot`,`TurnOrderTile`,`Match` <br> Controller:Server/client  <br> Network: socket/RMI implementation <br> Tui Logic <br> Player Persistance |  
+All team members actively participated in the design phase of every project component. The subsequent programming workload was then distributed as follows:
+
+| Member Name | Area of Responsibility                                                                                                                                               | 
+| :--- |:---------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Simone | Model: `card` and effects implementation, `Decks`, `Match` <br>Controller:Server/client <br>Network: socket/RMI implementation <br> Tui <br> DB implementation       |  
+| Gaia| Model:  <br> Controller:Server/Client <br> Gui implementation <br>                                                                                                   |  
+| Giacomo | Model: `TurnOrderSlot`,`TurnOrderTile`,`Match`,`Decks` <br> Controller:Server/client  <br> Network: socket/RMI implementation <br> Tui Logic <br> Player Persistance |  
 
 ---
 
