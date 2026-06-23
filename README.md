@@ -98,13 +98,8 @@ Replace `192.168.1.50` with the actual LAN IP of the machine running the server.
 - [Model UML](Mesos/deliverables/final/UMLModel.png)
 - [Controller UML](Mesos/deliverables/final/ControllerUML.svg)
 
-### Coverage Report
-The JUnit test coverage report can be viewed at the following link:
-- [Test Coverage Report](link_here)
 
-### JavaDoc
-The code documentation, compiled according to JavaDoc standards, can be accessed at the following address:
-- [Javadoc](link_here)
+---
 
 ### Database Dump
 The SQL dump file of the database structure can be found at the following link:
